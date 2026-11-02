@@ -28,11 +28,26 @@
 
     <section class="panel">
 
+      <!-- IMAGE UPLOAD AND PREVIEW -->
       <label class="upload-area" for="imageInput">
-        <span class="upload-icon">↑</span>
-        <strong>Choose a road image</strong>
-        <span>Select an existing photo from your device</span>
-        <input id="imageInput" type="file" accept="image/*" />
+
+        <div class="upload-instructions">
+          <span class="upload-icon">↑</span>
+          <strong>Choose a road image</strong>
+          <span>Select an existing photo from your device</span>
+        </div>
+
+        <input
+          id="imageInput"
+          type="file"
+          accept="image/*"
+        />
+
+        <!-- IMAGE APPEARS INSIDE THE UPLOAD BOX -->
+        <div id="imagePreview" class="image-preview" hidden>
+          <img id="roadImage" alt="Selected road image" />
+        </div>
+
       </label>
 
       <div class="camera-control">
@@ -49,10 +64,6 @@
         />
 
         <p>Use your phone's rear camera to photograph a road.</p>
-      </div>
-
-      <div id="imagePreview" class="image-preview" hidden>
-        <img id="roadImage" alt="Selected road image" />
       </div>
 
       <div class="confidence-control">
