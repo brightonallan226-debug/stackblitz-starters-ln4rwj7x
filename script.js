@@ -540,27 +540,8 @@ function displayReport(
     `${elapsedTime.toFixed(2)} seconds`
   );
 
-  if (location) {
-    addReportLine(
-      'Latitude',
-      location.latitude.toFixed(7)
-    );
-
-    addReportLine(
-      'Longitude',
-      location.longitude.toFixed(7)
-    );
-
-    addReportLine(
-      'GPS accuracy',
-      `${Math.round(location.accuracy)} metres`
-    );
-  } else {
-    addReportLine(
-      'GPS location',
-      'Unavailable'
-    );
-  }
+  // GPS coordinates are displayed only in the GPS panel above.
+  // They remain saved in the inspection record below.
 
   if (detections.length > 0) {
     const average =
@@ -727,3 +708,4 @@ detectButton.addEventListener('click', async () => {
     detectButton.disabled = false;
   }
 });
+
