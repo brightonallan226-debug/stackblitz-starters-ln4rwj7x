@@ -1,94 +1,130 @@
+
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#101827" />
-    <title>Pothole Vision | Road Detection</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <header class="header">
-      <div class="brand">POTHOLE<span>VISION</span></div>
-      <p>AI-powered road inspection</p>
-    </header>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#101827" />
+  <title>Pothole Vision | Road Detection</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
 
-    <main class="container">
-      <section class="intro">
-        <p class="eyebrow">ROAD SAFETY TECHNOLOGY</p>
-        <h1>Detect potholes.<br /><span>Improve roads.</span></h1>
-        <p class="subtitle">
-          Upload a road image or take a photograph to identify potholes using
-          your trained AI model.
-        </p>
-      </section>
+<body>
+  <header class="header">
+    <div class="brand">POTHOLE<span>VISION</span></div>
+    <p>AI-powered road inspection and mapping</p>
+  </header>
 
-      <section class="panel">
-        <label class="upload-area" for="imageInput">
-          <span class="upload-icon">↑</span>
-          <strong>Choose a road image</strong>
-          <span>Select an existing photo from your device</span>
-          <input id="imageInput" type="file" accept="image/*" />
+  <main class="container">
+
+    <section class="intro">
+      <p class="eyebrow">ROAD SAFETY TECHNOLOGY</p>
+      <h1>Detect potholes.<br /><span>Improve roads.</span></h1>
+      <p class="subtitle">
+        Upload a road image or take a photograph to identify and
+        record potholes using your trained AI model.
+      </p>
+    </section>
+
+    <section class="panel">
+
+      <label class="upload-area" for="imageInput">
+        <span class="upload-icon">↑</span>
+        <strong>Choose a road image</strong>
+        <span>Select an existing photo from your device</span>
+        <input id="imageInput" type="file" accept="image/*" />
+      </label>
+
+      <div class="camera-control">
+        <button type="button" id="cameraButton" class="camera-button">
+          Take a Photo
+        </button>
+
+        <input
+          id="cameraInput"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+        />
+
+        <p>Use your phone's rear camera to photograph a road.</p>
+      </div>
+
+      <div id="imagePreview" class="image-preview" hidden>
+        <img id="roadImage" alt="Selected road image" />
+      </div>
+
+      <div class="confidence-control">
+        <label for="confidenceThreshold">
+          Detection confidence threshold
         </label>
 
-        <div class="camera-control">
-          <button type="button" id="cameraButton" class="camera-button">
-            Take a Photo
-          </button>
+        <select id="confidenceThreshold">
+          <option value="0.25" selected>25% - More detections</option>
+          <option value="0.40">40% - Balanced</option>
+          <option value="0.60">60% - Higher confidence</option>
+        </select>
 
-          <input
-            id="cameraInput"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-          />
+        <p>
+          Higher confidence settings show fewer detections but require
+          stronger model predictions.
+        </p>
+      </div>
 
-          <p>Use your phone's rear camera to photograph a road.</p>
-        </div>
+      <!-- GPS INSPECTION INFORMATION -->
+      <section class="gps-panel">
+        <h3>GPS Inspection Location</h3>
 
-        <div id="imagePreview" class="image-preview" hidden>
-          <img id="roadImage" alt="Selected road image" />
-        </div>
+        <p id="locationStatus" role="status">
+          Location will be requested when detection starts.
+        </p>
 
-        <div class="confidence-control">
-          <label for="confidenceThreshold">
-            Detection confidence threshold
-          </label>
-
-          <select id="confidenceThreshold">
-            <option value="0.25" selected>25% - More detections</option>
-            <option value="0.40">40% - Balanced</option>
-            <option value="0.60">60% - Higher confidence</option>
-          </select>
+        <div class="gps-details">
+          <p>
+            <strong>Latitude:</strong>
+            <span id="latitude">Not available</span>
+          </p>
 
           <p>
-            Higher confidence settings show fewer detections but require
-            stronger model predictions.
+            <strong>Longitude:</strong>
+            <span id="longitude">Not available</span>
+          </p>
+
+          <p>
+            <strong>GPS accuracy:</strong>
+            <span id="gpsAccuracy">Not available</span>
           </p>
         </div>
-
-        <button id="detectButton" disabled>Detect potholes</button>
-
-        <p id="status" role="status">
-          Choose an image or take a photo to get started.
-        </p>
-
-        <div id="results" aria-live="polite"></div>
       </section>
 
-      <section class="note">
-        <strong>How it works</strong>
-        <p>
-          Upload or photograph a road, select your confidence threshold, run the
-          AI detector, and review the detected potholes.
-        </p>
-      </section>
-    </main>
+      <button id="detectButton" disabled>
+        Detect potholes
+      </button>
 
-    <footer>Pothole Vision · AI road inspection</footer>
+      <p id="status" role="status">
+        Choose an image or take a photo to get started.
+      </p>
 
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
-    <script src="script.js"></script>
-  </body>
+      <div id="results" aria-live="polite"></div>
+
+    </section>
+
+    <section class="note">
+      <strong>How it works</strong>
+      <p>
+        Upload or photograph a road, obtain its GPS location,
+        select your confidence threshold, run the AI detector,
+        and review the inspection results.
+      </p>
+    </section>
+
+  </main>
+
+  <footer>Pothole Vision · AI road inspection</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
+  <script src="script.js"></script>
+
+</body>
 </html>

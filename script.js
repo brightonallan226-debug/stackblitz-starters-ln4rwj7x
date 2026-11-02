@@ -1,3 +1,4 @@
+
 const MODEL_URL =
   'https://raw.githubusercontent.com/brightonallan226-debug/pothole-model/main/best.onnx';
 
@@ -5,7 +6,10 @@ const IMAGE_SIZE = 640;
 const IOU_THRESHOLD = 0.45;
 const MAX_CANDIDATES = 300;
 
+// --------------------------------------------------
 // HTML ELEMENTS
+// --------------------------------------------------
+
 const imageInput = document.getElementById('imageInput');
 const cameraInput = document.getElementById('cameraInput');
 const cameraButton = document.getElementById('cameraButton');
@@ -16,7 +20,15 @@ const confidenceSelector = document.getElementById('confidenceThreshold');
 const status = document.getElementById('status');
 const results = document.getElementById('results');
 
+const locationStatus = document.getElementById('locationStatus');
+const latitudeElement = document.getElementById('latitude');
+const longitudeElement = document.getElementById('longitude');
+const gpsAccuracyElement = document.getElementById('gpsAccuracy');
+
+// --------------------------------------------------
 // APPLICATION STATE
+// --------------------------------------------------
+
 let selectedImage = null;
 let modelSession = null;
 let overlay = null;
@@ -46,17 +58,19 @@ function handleImageFile(file) {
     results.textContent = '';
     removeOverlay();
 
-    status.textContent = 'Image ready. Choose confidence and detect potholes.';
+    status.textContent =
+      'Image ready. Choose confidence and detect potholes.';
   };
 
   roadImage.onerror = () => {
-    status.textContent = 'Could not load this image. Please try again.';
+    status.textContent =
+      'Could not load this image. Please try again.';
   };
 
   roadImage.src = selectedImage;
 }
 
-// Select image from gallery
+// Gallery upload
 imageInput.addEventListener('change', () => {
   handleImageFile(imageInput.files?.[0]);
 });
@@ -66,10 +80,95 @@ cameraButton.addEventListener('click', () => {
   cameraInput.click();
 });
 
-// Process photograph taken using camera
+// Process camera photograph
 cameraInput.addEventListener('change', () => {
   handleImageFile(cameraInput.files?.[0]);
 });
+
+// --------------------------------------------------
+// GPS LOCATION CAPTURE
+// --------------------------------------------------
+
+function updateGPSDisplay(location) {
+  if (!location) {
+    locationStatus.textContent =
+      'GPS location unavailable. Detection can continue without it.';
+
+    latitudeElement.textContent = 'Not available';
+    longitudeElement.textContent = 'Not available';
+    gpsAccuracyElement.textContent = 'Not available';
+
+    return;
+  }
+
+  latitudeElement.textContent =
+    location.latitude.toFixed(7);
+
+  longitudeElement.textContent =
+    location.longitude.toFixed(7);
+
+  gpsAccuracyElement.textContent =
+    `${Math.round(location.accuracy)} metres`;
+
+  locationStatus.textContent =
+    'GPS location successfully captured.';
+}
+
+function getGPSLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      updateGPSDisplay(null);
+      resolve(null);
+      return;
+    }
+
+    locationStatus.textContent =
+      'Requesting GPS location. Please allow access...';
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        };
+
+        updateGPSDisplay(location);
+        console.log('GPS location:', location);
+
+        resolve(location);
+      },
+
+      (error) => {
+        console.warn('GPS error:', error.message);
+
+        let message = 'GPS location unavailable.';
+
+        if (error.code === 1) {
+          message =
+            'Location permission denied. Detection will continue.';
+        } else if (error.code === 2) {
+          message =
+            'GPS position unavailable. Detection will continue.';
+        } else if (error.code === 3) {
+          message =
+            'GPS request timed out. Detection will continue.';
+        }
+
+        locationStatus.textContent = message;
+        updateGPSDisplay(null);
+
+        resolve(null);
+      },
+
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0
+      }
+    );
+  });
+}
 
 // --------------------------------------------------
 // LOAD MODEL ONCE AND REUSE IT
@@ -87,10 +186,13 @@ async function loadModel() {
   window.ort.env.wasm.wasmPaths =
     'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';
 
-  modelSession = await window.ort.InferenceSession.create(MODEL_URL, {
-    executionProviders: ['wasm'],
-    graphOptimizationLevel: 'all',
-  });
+  modelSession = await window.ort.InferenceSession.create(
+    MODEL_URL,
+    {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all'
+    }
+  );
 
   console.log('Model loaded successfully.');
   console.log('Input:', modelSession.inputMetadata);
@@ -123,7 +225,7 @@ function prepareImage(image) {
   canvas.height = IMAGE_SIZE;
 
   const ctx = canvas.getContext('2d', {
-    willReadFrequently: true,
+    willReadFrequently: true
   });
 
   ctx.fillStyle = 'rgb(114,114,114)';
@@ -141,7 +243,12 @@ function prepareImage(image) {
     resizedHeight
   );
 
-  const pixels = ctx.getImageData(0, 0, IMAGE_SIZE, IMAGE_SIZE).data;
+  const pixels = ctx.getImageData(
+    0,
+    0,
+    IMAGE_SIZE,
+    IMAGE_SIZE
+  ).data;
 
   const planeSize = IMAGE_SIZE * IMAGE_SIZE;
   const input = new Float32Array(3 * planeSize);
@@ -153,17 +260,16 @@ function prepareImage(image) {
   }
 
   return {
-    tensor: new window.ort.Tensor('float32', input, [
-      1,
-      3,
-      IMAGE_SIZE,
-      IMAGE_SIZE,
-    ]),
+    tensor: new window.ort.Tensor(
+      'float32',
+      input,
+      [1, 3, IMAGE_SIZE, IMAGE_SIZE]
+    ),
     scale,
     padX,
     padY,
     originalWidth,
-    originalHeight,
+    originalHeight
   };
 }
 
@@ -177,13 +283,15 @@ function calculateIoU(a, b) {
   const x2 = Math.min(a.x2, b.x2);
   const y2 = Math.min(a.y2, b.y2);
 
-  const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const intersection =
+    Math.max(0, x2 - x1) *
+    Math.max(0, y2 - y1);
 
   const areaA = (a.x2 - a.x1) * (a.y2 - a.y1);
-
   const areaB = (b.x2 - b.x1) * (b.y2 - b.y1);
 
-  return intersection / (areaA + areaB - intersection + 1e-7);
+  return intersection /
+    (areaA + areaB - intersection + 1e-7);
 }
 
 // --------------------------------------------------
@@ -206,7 +314,9 @@ function nonMaximumSuppression(boxes) {
     for (let j = i + 1; j < candidates.length; j++) {
       if (suppressed[j]) continue;
 
-      if (calculateIoU(best, candidates[j]) >= IOU_THRESHOLD) {
+      if (
+        calculateIoU(best, candidates[j]) >= IOU_THRESHOLD
+      ) {
         suppressed[j] = 1;
       }
     }
@@ -219,7 +329,11 @@ function nonMaximumSuppression(boxes) {
 // DECODE YOLO OUTPUT
 // --------------------------------------------------
 
-function decodePredictions(output, transform, confidenceThreshold) {
+function decodePredictions(
+  output,
+  transform,
+  confidenceThreshold
+) {
   const data = output.data;
   const dimensions = output.dims;
 
@@ -229,7 +343,8 @@ function decodePredictions(output, transform, confidenceThreshold) {
     dimensions[2] !== 8400
   ) {
     throw new Error(
-      'Unexpected model output shape: ' + JSON.stringify(dimensions)
+      'Unexpected model output shape: ' +
+      JSON.stringify(dimensions)
     );
   }
 
@@ -238,7 +353,10 @@ function decodePredictions(output, transform, confidenceThreshold) {
   for (let i = 0; i < 8400; i++) {
     const score = data[4 * 8400 + i];
 
-    if (!Number.isFinite(score) || score < confidenceThreshold) {
+    if (
+      !Number.isFinite(score) ||
+      score < confidenceThreshold
+    ) {
       continue;
     }
 
@@ -247,20 +365,28 @@ function decodePredictions(output, transform, confidenceThreshold) {
     const width = data[2 * 8400 + i];
     const height = data[3 * 8400 + i];
 
-    const x1 = (cx - width / 2 - transform.padX) / transform.scale;
+    const x1 =
+      (cx - width / 2 - transform.padX) /
+      transform.scale;
 
-    const y1 = (cy - height / 2 - transform.padY) / transform.scale;
+    const y1 =
+      (cy - height / 2 - transform.padY) /
+      transform.scale;
 
-    const x2 = (cx + width / 2 - transform.padX) / transform.scale;
+    const x2 =
+      (cx + width / 2 - transform.padX) /
+      transform.scale;
 
-    const y2 = (cy + height / 2 - transform.padY) / transform.scale;
+    const y2 =
+      (cy + height / 2 - transform.padY) /
+      transform.scale;
 
     const box = {
       x1: Math.max(0, Math.min(transform.originalWidth, x1)),
       y1: Math.max(0, Math.min(transform.originalHeight, y1)),
       x2: Math.max(0, Math.min(transform.originalWidth, x2)),
       y2: Math.max(0, Math.min(transform.originalHeight, y2)),
-      score,
+      score
     };
 
     if (box.x2 > box.x1 && box.y2 > box.y1) {
@@ -269,7 +395,6 @@ function decodePredictions(output, transform, confidenceThreshold) {
   }
 
   console.log('Selected confidence:', confidenceThreshold);
-
   console.log('Candidates before NMS:', candidates.length);
 
   return nonMaximumSuppression(candidates);
@@ -280,7 +405,8 @@ function decodePredictions(output, transform, confidenceThreshold) {
 // --------------------------------------------------
 
 function removeOverlay() {
-  const existing = document.getElementById('detectionOverlay');
+  const existing =
+    document.getElementById('detectionOverlay');
 
   if (existing) existing.remove();
 
@@ -302,9 +428,13 @@ function drawDetections(boxes, image) {
 
   const ctx = overlay.getContext('2d');
 
-  ctx.lineWidth = Math.max(3, image.naturalWidth / 300);
+  ctx.lineWidth = Math.max(
+    3,
+    image.naturalWidth / 300
+  );
 
-  ctx.font = `bold ${Math.max(16, image.naturalWidth / 35)}px Arial`;
+  ctx.font =
+    `bold ${Math.max(16, image.naturalWidth / 35)}px Arial`;
 
   boxes.forEach((box) => {
     const width = box.x2 - box.x1;
@@ -313,21 +443,34 @@ function drawDetections(boxes, image) {
     ctx.strokeStyle = '#b7f34a';
     ctx.strokeRect(box.x1, box.y1, width, height);
 
-    const label = `Pothole ${Math.round(box.score * 100)}%`;
+    const label =
+      `Pothole ${Math.round(box.score * 100)}%`;
 
-    const labelWidth = ctx.measureText(label).width + 14;
+    const labelWidth =
+      ctx.measureText(label).width + 14;
 
-    const labelHeight = Math.max(24, image.naturalWidth / 30);
+    const labelHeight =
+      Math.max(24, image.naturalWidth / 30);
 
-    const labelY = Math.max(labelHeight, box.y1);
+    const labelY =
+      Math.max(labelHeight, box.y1);
 
     ctx.fillStyle = '#b7f34a';
 
-    ctx.fillRect(box.x1, labelY - labelHeight, labelWidth, labelHeight);
+    ctx.fillRect(
+      box.x1,
+      labelY - labelHeight,
+      labelWidth,
+      labelHeight
+    );
 
     ctx.fillStyle = '#101827';
 
-    ctx.fillText(label, box.x1 + 7, labelY - 6);
+    ctx.fillText(
+      label,
+      box.x1 + 7,
+      labelY - 6
+    );
   });
 
   imagePreview.style.position = 'relative';
@@ -340,9 +483,11 @@ function drawDetections(boxes, image) {
   overlay.style.left = '50%';
   overlay.style.transform = 'translateX(-50%)';
 
-  overlay.style.width = image.getBoundingClientRect().width + 'px';
+  overlay.style.width =
+    image.getBoundingClientRect().width + 'px';
 
-  overlay.style.height = image.getBoundingClientRect().height + 'px';
+  overlay.style.height =
+    image.getBoundingClientRect().height + 'px';
 
   overlay.style.pointerEvents = 'none';
 
@@ -350,50 +495,84 @@ function drawDetections(boxes, image) {
 }
 
 // --------------------------------------------------
-// DISPLAY DETECTION REPORT
+// DISPLAY INSPECTION REPORT
 // --------------------------------------------------
 
-function displayReport(detections, elapsedTime, confidenceThreshold) {
+function displayReport(
+  detections,
+  elapsedTime,
+  confidenceThreshold,
+  location,
+  inspectedAt
+) {
   results.innerHTML = '';
 
   const summary = document.createElement('div');
   summary.className = 'detection-summary';
 
+  function addReportLine(label, value) {
+    const line = document.createElement('p');
+    line.textContent = `${label}: ${value}`;
+    summary.appendChild(line);
+  }
+
   const heading = document.createElement('h3');
-  heading.textContent = 'Detection Report';
+  heading.textContent = 'Road Inspection Report';
   summary.appendChild(heading);
 
-  const count = document.createElement('p');
+  addReportLine(
+    'Total potholes detected',
+    detections.length
+  );
 
-  count.textContent = `Total potholes detected: ${detections.length}`;
+  addReportLine(
+    'Confidence threshold',
+    `${Math.round(confidenceThreshold * 100)}%`
+  );
 
-  summary.appendChild(count);
+  addReportLine(
+    'Inspection date and time',
+    new Date(inspectedAt).toLocaleString()
+  );
 
-  const threshold = document.createElement('p');
+  addReportLine(
+    'Analysis time',
+    `${elapsedTime.toFixed(2)} seconds`
+  );
 
-  threshold.textContent = `Confidence threshold: ${Math.round(
-    confidenceThreshold * 100
-  )}%`;
+  if (location) {
+    addReportLine(
+      'Latitude',
+      location.latitude.toFixed(7)
+    );
 
-  summary.appendChild(threshold);
+    addReportLine(
+      'Longitude',
+      location.longitude.toFixed(7)
+    );
 
-  const time = document.createElement('p');
-
-  time.textContent = `Analysis time: ${elapsedTime.toFixed(2)} seconds`;
-
-  summary.appendChild(time);
+    addReportLine(
+      'GPS accuracy',
+      `${Math.round(location.accuracy)} metres`
+    );
+  } else {
+    addReportLine(
+      'GPS location',
+      'Unavailable'
+    );
+  }
 
   if (detections.length > 0) {
     const average =
-      detections.reduce((sum, box) => sum + box.score, 0) / detections.length;
+      detections.reduce(
+        (sum, box) => sum + box.score,
+        0
+      ) / detections.length;
 
-    const averageText = document.createElement('p');
-
-    averageText.textContent = `Average confidence: ${Math.round(
-      average * 100
-    )}%`;
-
-    summary.appendChild(averageText);
+    addReportLine(
+      'Average confidence',
+      `${Math.round(average * 100)}%`
+    );
 
     const list = document.createElement('ul');
 
@@ -401,9 +580,19 @@ function displayReport(detections, elapsedTime, confidenceThreshold) {
       const item = document.createElement('li');
 
       item.textContent =
-        `Pothole ${index + 1}: ` + `${Math.round(box.score * 100)}% confidence`;
+        `Pothole ${index + 1}: ` +
+        `${Math.round(box.score * 100)}% confidence`;
 
       list.appendChild(item);
+
+      // Attach inspection metadata to each detection.
+      box.inspection = {
+        inspectedAt,
+        latitude: location ? location.latitude : null,
+        longitude: location ? location.longitude : null,
+        gpsAccuracy: location ? location.accuracy : null,
+        confidenceThreshold
+      };
     });
 
     summary.appendChild(list);
@@ -417,6 +606,16 @@ function displayReport(detections, elapsedTime, confidenceThreshold) {
   }
 
   results.appendChild(summary);
+
+  // Keep structured inspection data available for future export.
+  window.lastInspection = {
+    inspectedAt,
+    confidenceThreshold,
+    location,
+    detections
+  };
+
+  console.log('Complete inspection record:', window.lastInspection);
 }
 
 // --------------------------------------------------
@@ -427,7 +626,8 @@ detectButton.addEventListener('click', async () => {
   if (isDetecting) return;
 
   if (!selectedImage) {
-    status.textContent = 'Please select an image or take a photo first.';
+    status.textContent =
+      'Please select an image or take a photo first.';
     return;
   }
 
@@ -440,7 +640,8 @@ detectButton.addEventListener('click', async () => {
     confidenceThreshold <= 0 ||
     confidenceThreshold > 1
   ) {
-    status.textContent = 'Please select a valid confidence threshold.';
+    status.textContent =
+      'Please select a valid confidence threshold.';
     return;
   }
 
@@ -451,8 +652,14 @@ detectButton.addEventListener('click', async () => {
   removeOverlay();
 
   const startTime = performance.now();
+  const inspectedAt = new Date().toISOString();
 
   try {
+    // Request GPS immediately from the user's button interaction.
+    const gpsPromise = getGPSLocation();
+
+    status.textContent = 'Loading AI model...';
+
     await loadModel();
 
     status.textContent = 'Preparing road image...';
@@ -466,42 +673,55 @@ detectButton.addEventListener('click', async () => {
 
     const prepared = prepareImage(roadImage);
 
-    status.textContent = `AI analysing road at ${Math.round(
-      confidenceThreshold * 100
-    )}% confidence...`;
+    status.textContent =
+      `AI analysing road at ${Math.round(confidenceThreshold * 100)}% confidence...`;
 
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await new Promise(resolve => setTimeout(resolve, 30));
 
     const feeds = {
-      [modelSession.inputNames[0]]: prepared.tensor,
+      [modelSession.inputNames[0]]: prepared.tensor
     };
 
     const predictions = await modelSession.run(feeds);
 
-    const output = predictions[modelSession.outputNames[0]];
+    const output =
+      predictions[modelSession.outputNames[0]];
 
-    const detections = decodePredictions(output, prepared, confidenceThreshold);
+    const detections = decodePredictions(
+      output,
+      prepared,
+      confidenceThreshold
+    );
+
+    // Wait for GPS, but never prevent detection if GPS fails.
+    const location = await gpsPromise;
 
     drawDetections(detections, roadImage);
 
-    const elapsedTime = (performance.now() - startTime) / 1000;
+    const elapsedTime =
+      (performance.now() - startTime) / 1000;
 
-    displayReport(detections, elapsedTime, confidenceThreshold);
+    displayReport(
+      detections,
+      elapsedTime,
+      confidenceThreshold,
+      location,
+      inspectedAt
+    );
 
-    status.textContent =
-      detections.length > 0
-        ? `Analysis complete: ${detections.length} pothole(s) detected.`
-        : 'Analysis complete: no potholes detected.';
+    status.textContent = detections.length > 0
+      ? `Inspection complete: ${detections.length} pothole(s) detected.`
+      : 'Inspection complete: no potholes detected.';
 
     console.log('Analysis time:', elapsedTime, 'seconds');
-
     console.log('Pothole detections:', detections);
+
   } catch (error) {
     console.error('Detection error:', error);
 
     status.textContent = 'Detection failed.';
-
     results.textContent = error.message || String(error);
+
   } finally {
     isDetecting = false;
     detectButton.disabled = false;
