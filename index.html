@@ -2,73 +2,249 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#101827" />
-  <title>Pothole Vision | Road Detection</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1120">
+  <title>Pothole Vision | AI Road Inspection</title>
+
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="map.css">
+
+  <!-- Leaflet map styling -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  >
 </head>
 
 <body>
-  <header class="header">
-    <div class="brand">POTHOLE<span>VISION</span></div>
-    <p>AI-powered road inspection and mapping</p>
+<div class="app-container">
+
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">PV</div>
+      <div>
+        <h1>POTHOLE VISION</h1>
+        <p>AI ROAD INSPECTION & MAPPING</p>
+      </div>
+    </div>
+
+    <div class="header-status">
+      <span class="status-indicator"></span>
+      AI DETECTION SYSTEM
+    </div>
   </header>
 
-  <main class="container">
+  <!-- INTRODUCTION -->
+  <section class="intro-section">
+    <p class="eyebrow">ROAD SAFETY TECHNOLOGY</p>
+    <h2>Detect potholes.<br><span style="color:#b7f34a">Improve roads.</span></h2>
+    <p>
+      Capture road images, detect potholes using artificial
+      intelligence, and record their geographical locations.
+    </p>
+  </section>
 
-    <section class="intro">
-      <p class="eyebrow">ROAD SAFETY TECHNOLOGY</p>
-      <h1>Detect potholes.<br /><span>Improve roads.</span></h1>
-      <p class="subtitle">
-        Upload a road image or take a photograph to identify and
-        record potholes using your trained AI model.
-      </p>
-    </section>
+  <!-- ACCOUNT ACCESS -->
+  <section class="auth-section">
+    <div class="section-heading">
+      <div class="section-number">01</div>
+      <div>
+        <h2>Account Access</h2>
+        <p>Sign in to save and access your inspection records.</p>
+      </div>
+    </div>
 
-    <section class="panel">
-
-      <!-- IMAGE UPLOAD AND PREVIEW -->
-      <label class="upload-area" for="imageInput">
-
-        <div class="upload-instructions">
-          <span class="upload-icon">↑</span>
-          <strong>Choose a road image</strong>
-          <span>Select an existing photo from your device</span>
-        </div>
-
+    <form id="authForm" class="auth-form">
+      <div class="form-group">
+        <label for="authEmail">Email address</label>
         <input
-          id="imageInput"
-          type="file"
-          accept="image/*"
-        />
-
-        <!-- IMAGE APPEARS INSIDE THE UPLOAD BOX -->
-        <div id="imagePreview" class="image-preview" hidden>
-          <img id="roadImage" alt="Selected road image" />
-        </div>
-
-      </label>
-
-      <div class="camera-control">
-        <button type="button" id="cameraButton" class="camera-button">
-          Take a Photo
-        </button>
-
-        <input
-          id="cameraInput"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-        />
-
-        <p>Use your phone's rear camera to photograph a road.</p>
+          id="authEmail"
+          type="email"
+          autocomplete="email"
+          placeholder="Enter your email"
+          required
+        >
       </div>
 
-      <div class="confidence-control">
+      <div class="form-group">
+        <label for="authPassword">Password</label>
+        <input
+          id="authPassword"
+          type="password"
+          autocomplete="current-password"
+          minlength="8"
+          placeholder="Enter your password"
+          required
+        >
+
+        <label class="password-toggle">
+          <input
+            type="checkbox"
+            id="showPassword"
+            onchange="
+              const field = document.getElementById('authPassword');
+              field.type = this.checked ? 'text' : 'password';
+              document.getElementById('passwordToggleText').textContent =
+                this.checked ? 'Hide password' : 'Show password';
+            "
+          >
+          <span id="passwordToggleText">Show password</span>
+        </label>
+      </div>
+
+      <div class="auth-buttons">
+        <button type="button" id="signInButton" class="primary-button">
+          Sign In
+        </button>
+
+        <button type="button" id="signUpButton" class="secondary-button">
+          Create Account
+        </button>
+      </div>
+    </form>
+
+    <div id="authUserPanel" class="auth-user-panel" hidden>
+      <div class="user-information">
+        <span class="user-indicator"></span>
+        <div>
+          <p class="user-label">SIGNED IN AS</p>
+          <p id="signedInEmail" class="signed-in-email"></p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        id="signOutButton"
+        class="secondary-button"
+      >
+        Sign Out
+      </button>
+    </div>
+
+    <p id="authMessage" class="auth-message" role="status">
+      Checking authentication...
+    </p>
+  </section>
+
+  <!-- APPLICATION NAVIGATION -->
+  <nav class="app-navigation" aria-label="Main application sections">
+    <button
+      type="button"
+      id="inspectionTab"
+      class="nav-tab active"
+      aria-selected="true"
+    >
+      Road Inspection
+    </button>
+
+    <button
+      type="button"
+      id="mapTab"
+      class="nav-tab"
+      aria-selected="false"
+    >
+      Pothole Map
+    </button>
+  </nav>
+
+  <!-- ROAD INSPECTION VIEW -->
+  <div id="inspectionView">
+
+    <section class="inspection-section">
+
+      <div class="section-heading">
+        <div class="section-number">02</div>
+        <div>
+          <h2>Road Inspection</h2>
+          <p>Upload a road image or capture one using your camera.</p>
+        </div>
+      </div>
+
+      <!-- IMAGE UPLOAD -->
+      <div class="upload-container">
+        <div class="upload-content">
+          <div class="upload-icon">+</div>
+          <h3>Select a road image</h3>
+          <p>Choose an existing photograph from your device.</p>
+
+          <input
+            type="file"
+            id="imageInput"
+            accept="image/*"
+            hidden
+          >
+
+          <button
+            type="button"
+            id="browseButton"
+            class="primary-button"
+          >
+            Choose a Photo
+          </button>
+        </div>
+      </div>
+
+      <!-- IMAGE PREVIEW -->
+      <div id="imagePreview" class="image-preview" hidden>
+        <img id="roadImage" alt="Selected road photograph">
+      </div>
+
+      <!-- IMAGE CHANGE -->
+      <div class="image-controls">
+        <button
+          type="button"
+          id="changeImageButton"
+          class="secondary-button"
+        >
+          Change Image
+        </button>
+
+        <button
+          type="button"
+          id="cameraButton"
+          class="primary-button"
+        >
+          Take a Photo
+        </button>
+      </div>
+
+      <!-- LIVE CAMERA -->
+      <section id="cameraPanel" class="camera-panel" hidden>
+        <h3>Live Rear Camera</h3>
+        <p>Position your phone towards the road.</p>
+
+        <video
+          id="cameraVideo"
+          autoplay
+          muted
+          playsinline
+        ></video>
+
+        <div class="camera-actions">
+          <button
+            type="button"
+            id="capturePhotoButton"
+            class="primary-button"
+          >
+            Capture Photo
+          </button>
+
+          <button
+            type="button"
+            id="cancelCameraButton"
+            class="secondary-button"
+          >
+            Cancel
+          </button>
+        </div>
+      </section>
+
+      <!-- CONFIDENCE -->
+      <div class="confidence-section">
         <label for="confidenceThreshold">
-          Detection confidence threshold
+          Detection Confidence Threshold
         </label>
 
         <select id="confidenceThreshold">
@@ -83,59 +259,162 @@
         </p>
       </div>
 
-      <!-- GPS INSPECTION INFORMATION -->
-      <section class="gps-panel">
-        <h3>GPS Inspection Location</h3>
+      <!-- GPS -->
+      <section class="gps-section">
+        <div class="gps-heading">
+          <div>
+            <h3>GPS Inspection Location</h3>
+            <p>Geographical location of the inspection.</p>
+          </div>
 
-        <p id="locationStatus" role="status">
+          <span class="gps-icon">GPS</span>
+        </div>
+
+        <p id="locationStatus" class="location-status">
           Location will be requested when detection starts.
         </p>
 
         <div class="gps-details">
-          <p>
-            <strong>Latitude:</strong>
-            <span id="latitude">Not available</span>
-          </p>
+          <div class="gps-item">
+            <span>Latitude</span>
+            <strong id="latitude">Not available</strong>
+          </div>
 
-          <p>
-            <strong>Longitude:</strong>
-            <span id="longitude">Not available</span>
-          </p>
+          <div class="gps-item">
+            <span>Longitude</span>
+            <strong id="longitude">Not available</strong>
+          </div>
 
-          <p>
-            <strong>GPS accuracy:</strong>
-            <span id="gpsAccuracy">Not available</span>
-          </p>
+          <div class="gps-item">
+            <span>GPS accuracy</span>
+            <strong id="gpsAccuracy">Not available</strong>
+          </div>
         </div>
       </section>
 
-      <button id="detectButton" disabled>
-        Detect potholes
+      <!-- DETECTION -->
+      <button
+        type="button"
+        id="detectButton"
+        class="detect-button"
+        disabled
+      >
+        DETECT POTHOLES
       </button>
 
-      <p id="status" role="status">
-        Choose an image or take a photo to get started.
+      <p id="status" class="status-message" role="status">
+        Choose a road image or take a photograph to begin.
       </p>
 
-      <div id="results" aria-live="polite"></div>
+      <div id="results" class="results-container" aria-live="polite"></div>
 
     </section>
+  </div>
 
-    <section class="note">
-      <strong>How it works</strong>
-      <p>
-        Upload or photograph a road, obtain its GPS location,
-        select your confidence threshold, run the AI detector,
-        and review the inspection results.
+  <!-- POTHOLE MAP VIEW -->
+  <section id="mapView" class="map-section" hidden>
+
+    <div class="section-heading">
+      <div class="section-number">03</div>
+      <div>
+        <h2>Pothole Map</h2>
+        <p>Explore the geographical locations of saved inspections.</p>
+      </div>
+    </div>
+
+    <div class="map-summary">
+      <div class="map-stat">
+        <span>Saved inspections</span>
+        <strong id="mapInspectionCount">0</strong>
+      </div>
+
+      <div class="map-stat">
+        <span>Potholes detected</span>
+        <strong id="mapPotholeCount">0</strong>
+      </div>
+
+      <div class="map-stat">
+        <span>Locations mapped</span>
+        <strong id="mapLocationCount">0</strong>
+      </div>
+    </div>
+
+    <div class="map-toolbar">
+      <p id="mapStatus" role="status">
+        Sign in to load your saved inspection locations.
       </p>
-    </section>
 
-  </main>
+      <button
+        type="button"
+        id="refreshMapButton"
+        class="primary-button"
+      >
+        Refresh Map
+      </button>
+    </div>
 
-  <footer>Pothole Vision · AI road inspection</footer>
+    <div id="inspectionMap" aria-label="Map of saved pothole inspections"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
-  <script src="script.js"></script>
+    <div class="map-legend">
+      <span class="legend-dot"></span>
+      <span>Saved inspection location</span>
+    </div>
+
+    <p class="map-disclaimer">
+      Map markers represent inspection GPS locations. They do not yet
+      represent the exact position of individual potholes.
+    </p>
+
+    <div class="map-records">
+      <h3>Inspection Locations</h3>
+      <div id="mapRecordsList">
+        <p class="empty-map-message">No inspection locations loaded yet.</p>
+      </div>
+    </div>
+
+    <p class="map-attribution">
+      Map data ©
+      <a href="https://www.openstreetmap.org/copyright"
+         target="_blank" rel="noopener noreferrer">
+        OpenStreetMap contributors
+      </a>
+    </p>
+
+  </section>
+
+  <!-- INFORMATION -->
+  <section class="results-section">
+    <h2>About Pothole Vision</h2>
+    <p>
+      Pothole Vision uses artificial intelligence to identify
+      potholes in road images. Each inspection can include GPS
+      coordinates, detection confidence and inspection records.
+    </p>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="app-footer">
+    <p>POTHOLE VISION</p>
+    <p>AI-powered road inspection and detection</p>
+    <p class="footer-note">
+      Supporting better road monitoring and safer journeys.
+    </p>
+  </footer>
+
+</div>
+
+<!-- AI AND DATABASE LIBRARIES -->
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- MAP LIBRARY -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- EXISTING APPLICATION -->
+<script src="script.js"></script>
+
+<!-- NEW MAP MODULE -->
+<script src="map.js"></script>
 
 </body>
 </html>
