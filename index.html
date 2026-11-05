@@ -5,9 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#0b1120">
+
   <title>Pothole Vision | AI Road Inspection</title>
 
-  <!-- MAIN APPLICATION STYLES -->
+  <!-- APPLICATION STYLES -->
   <link rel="stylesheet" href="./styles.css">
 
   <!-- LEAFLET MAP STYLES -->
@@ -16,53 +17,396 @@
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   >
 
-  <!-- POTHOLE VISION MAP STYLES -->
   <link rel="stylesheet" href="./map.css?v=2">
 
+  <style>
+    [hidden] {
+      display: none !important;
+    }
+
+    /* =====================================
+       LOGIN SCREEN
+    ===================================== */
+
+    .login-screen {
+      max-width: 520px;
+      margin: 30px auto;
+      padding: 24px;
+      background: #151f30;
+      border: 1px solid #334155;
+      border-radius: 16px;
+    }
+
+    .login-screen h2 {
+      color: #f8fafc;
+    }
+
+    .login-screen p {
+      color: #cbd5e1;
+    }
+
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .form-group label {
+      color: #e2e8f0;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    .form-group input {
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .password-toggle {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: #cbd5e1;
+      font-size: 12px;
+    }
+
+    .auth-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .auth-buttons button {
+      flex: 1;
+    }
+
+    .auth-message {
+      color: #b7f34a;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+
+    /* =====================================
+       PROFILE ICON AND DROPDOWN
+    ===================================== */
+
+    .account-menu-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      margin-left: auto;
+    }
+
+    .account-icon-button {
+      width: 42px !important;
+      height: 42px !important;
+      min-width: 42px;
+      padding: 0 !important;
+      margin: 0 !important;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      color: #b7f34a;
+      background: #151f30;
+      border: 1px solid #334155;
+      border-radius: 50%;
+
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+
+    .account-icon-button:hover {
+      background: #26351e;
+      border-color: #b7f34a;
+    }
+
+    .account-icon-button:focus-visible {
+      outline: 2px solid #b7f34a;
+      outline-offset: 3px;
+    }
+
+    .account-dropdown {
+      position: absolute;
+      top: 52px;
+      right: 0;
+      z-index: 3000;
+
+      width: 230px;
+      padding: 15px;
+
+      background: #151f30;
+      border: 1px solid #334155;
+      border-radius: 12px;
+
+      box-shadow: 0 12px 30px #0008;
+      box-sizing: border-box;
+    }
+
+    .account-dropdown[hidden] {
+      display: none !important;
+    }
+
+    .account-user-info {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      margin-bottom: 14px;
+
+      color: #f8fafc;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .account-user-info .user-indicator {
+      width: 9px;
+      height: 9px;
+      margin-top: 3px;
+      flex-shrink: 0;
+
+      background: #86efac;
+      border-radius: 50%;
+    }
+
+    .account-dropdown button {
+      width: 100%;
+      margin: 0;
+    }
+
+    /* =====================================
+       IMAGE UPLOAD AND PREVIEW
+    ===================================== */
+
+    .upload-container {
+      position: relative;
+      width: 100%;
+      min-height: 220px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      overflow: hidden;
+
+      border: 2px dashed #52627a;
+      border-radius: 14px;
+      background: #101827;
+
+      padding: 12px;
+      box-sizing: border-box;
+    }
+
+    .upload-container .upload-content {
+      width: 100%;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+
+      text-align: center;
+    }
+
+    .upload-container .image-preview {
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+
+      position: relative;
+      overflow: hidden;
+      border-radius: 10px;
+    }
+
+    .upload-container .image-preview img {
+      display: block;
+      width: 100%;
+      height: 380px;
+      max-height: 60vh;
+
+      object-fit: contain;
+      margin: auto;
+
+      border: none;
+      border-radius: 8px;
+    }
+
+    .upload-container:has(.image-preview:not([hidden])) {
+      border-style: solid;
+      border-color: #b7f34a;
+      padding: 8px;
+    }
+
+    .upload-container:has(.image-preview:not([hidden])) .upload-content {
+      display: none;
+    }
+
+    /* =====================================
+       CAMERA
+    ===================================== */
+
+    #cameraVideo {
+      width: 100%;
+      max-height: 420px;
+      background: #000;
+      border-radius: 12px;
+    }
+
+    .camera-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .camera-actions button {
+      flex: 1;
+    }
+
+    /* =====================================
+       MAP
+    ===================================== */
+
+    #inspectionMap {
+      display: block;
+      width: 100%;
+      height: 480px;
+      min-height: 380px;
+    }
+
+    /* =====================================
+       MOBILE
+    ===================================== */
+
+    @media (max-width: 600px) {
+      .upload-container .image-preview img {
+        height: 320px;
+      }
+
+      .login-screen {
+        padding: 18px;
+      }
+
+      .auth-buttons {
+        flex-direction: column;
+      }
+
+      .account-dropdown {
+        width: 220px;
+      }
+    }
+  </style>
 </head>
 
 <body>
+
 <div class="app-container">
 
-  <!-- HEADER -->
+  <!-- ===================================
+       HEADER
+  ==================================== -->
+
   <header class="app-header">
+
     <div class="brand">
+
       <div class="brand-icon">PV</div>
+
       <div>
         <h1>POTHOLE VISION</h1>
         <p>AI ROAD INSPECTION & MAPPING</p>
       </div>
+
     </div>
 
     <div class="header-status">
       <span class="status-indicator"></span>
       AI DETECTION SYSTEM
     </div>
+
+    <!-- PROFILE MENU -->
+    <div class="account-menu-container">
+
+      <button
+        type="button"
+        id="accountMenuButton"
+        class="account-icon-button"
+        aria-label="Open account menu"
+        aria-expanded="false"
+        aria-controls="authUserPanel"
+        hidden
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="22"
+          height="22"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="8" r="4"></circle>
+          <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"></path>
+        </svg>
+      </button>
+
+      <!-- ACCOUNT DROPDOWN -->
+      <div
+        id="authUserPanel"
+        class="account-dropdown"
+        hidden
+      >
+
+        <div class="account-user-info">
+          <span class="user-indicator"></span>
+          <span id="signedInEmail"></span>
+        </div>
+
+        <button
+          type="button"
+          id="signOutButton"
+          class="secondary-button"
+        >
+          Sign Out
+        </button>
+
+      </div>
+
+    </div>
+
   </header>
 
-  <!-- INTRODUCTION -->
-  <section class="intro-section">
-    <p class="eyebrow">ROAD SAFETY TECHNOLOGY</p>
-    <h2>Detect potholes.<br><span style="color:#b7f34a">Improve roads.</span></h2>
-    <p>
-      Capture road images, detect potholes using artificial
-      intelligence, and record their geographical locations.
-    </p>
-  </section>
+  <!-- ===================================
+       LOGIN SCREEN
+  ==================================== -->
 
-  <!-- ACCOUNT ACCESS -->
-  <section class="auth-section">
+  <main id="loginScreen" class="login-screen">
+
     <div class="section-heading">
+
       <div class="section-number">01</div>
+
       <div>
         <h2>Account Access</h2>
         <p>Sign in to save and access your inspection records.</p>
       </div>
+
     </div>
 
     <form id="authForm" class="auth-form">
+
       <div class="form-group">
+
         <label for="authEmail">Email address</label>
+
         <input
           id="authEmail"
           type="email"
@@ -70,10 +414,13 @@
           placeholder="Enter your email"
           required
         >
+
       </div>
 
       <div class="form-group">
+
         <label for="authPassword">Password</label>
+
         <input
           id="authPassword"
           type="password"
@@ -84,6 +431,7 @@
         >
 
         <label class="password-toggle">
+
           <input
             type="checkbox"
             id="showPassword"
@@ -94,338 +442,492 @@
                 this.checked ? 'Hide password' : 'Show password';
             "
           >
+
           <span id="passwordToggleText">Show password</span>
+
         </label>
+
       </div>
 
       <div class="auth-buttons">
-        <button type="button" id="signInButton" class="primary-button">
+
+        <button
+          type="button"
+          id="signInButton"
+          class="primary-button"
+        >
           Sign In
         </button>
 
-        <button type="button" id="signUpButton" class="secondary-button">
+        <button
+          type="button"
+          id="signUpButton"
+          class="secondary-button"
+        >
           Create Account
         </button>
+
       </div>
+
     </form>
 
-    <div id="authUserPanel" class="auth-user-panel" hidden>
-      <div class="user-information">
-        <span class="user-indicator"></span>
-        <div>
-          <p class="user-label">SIGNED IN AS</p>
-          <p id="signedInEmail" class="signed-in-email"></p>
-        </div>
-      </div>
+    <p id="authMessage" class="auth-message" role="status">
+      Checking your saved sign-in...
+    </p>
+
+  </main>
+
+  <!-- ===================================
+       MAIN APPLICATION WORKSPACE
+  ==================================== -->
+
+  <main id="appWorkspace" hidden>
+
+    <!-- NAVIGATION -->
+    <nav
+      class="app-navigation"
+      aria-label="Main application sections"
+    >
 
       <button
         type="button"
-        id="signOutButton"
-        class="secondary-button"
+        id="inspectionTab"
+        class="nav-tab active"
+        aria-selected="true"
       >
-        Sign Out
+        Road Inspection
       </button>
-    </div>
 
-    <p id="authMessage" class="auth-message" role="status">
-      Checking authentication...
-    </p>
-  </section>
+      <button
+        type="button"
+        id="mapTab"
+        class="nav-tab"
+        aria-selected="false"
+      >
+        Pothole Map
+      </button>
 
-  <!-- APPLICATION NAVIGATION -->
-  <nav class="app-navigation" aria-label="Main application sections">
-    <button
-      type="button"
-      id="inspectionTab"
-      class="nav-tab active"
-      aria-selected="true"
-    >
-      Road Inspection
-    </button>
+    </nav>
 
-    <button
-      type="button"
-      id="mapTab"
-      class="nav-tab"
-      aria-selected="false"
-    >
-      Pothole Map
-    </button>
-  </nav>
+    <!-- =================================
+         ROAD INSPECTION
+    ================================== -->
 
-  <!-- ROAD INSPECTION VIEW -->
-  <div id="inspectionView">
+    <section id="inspectionView">
 
-    <section class="inspection-section">
+      <div class="inspection-section">
 
-      <div class="section-heading">
-        <div class="section-number">02</div>
-        <div>
-          <h2>Road Inspection</h2>
-          <p>Upload a road image or capture one using your camera.</p>
+        <div class="section-heading">
+
+          <div class="section-number">01</div>
+
+          <div>
+            <h2>Road Inspection</h2>
+            <p>Upload a road image or capture one using your camera.</p>
+          </div>
+
         </div>
-      </div>
 
-      <!-- IMAGE UPLOAD -->
-      <div class="upload-container">
-        <div class="upload-content">
-          <div class="upload-icon">+</div>
-          <h3>Select a road image</h3>
-          <p>Choose an existing photograph from your device.</p>
+        <!-- IMAGE UPLOAD BOX -->
+        <div class="upload-container">
 
-          <input
-            type="file"
-            id="imageInput"
-            accept="image/*"
+          <div class="upload-content">
+
+            <div class="upload-icon">+</div>
+
+            <h3>Select a road image</h3>
+
+            <p>Choose an existing photograph from your device.</p>
+
+            <input
+              type="file"
+              id="imageInput"
+              accept="image/*"
+              hidden
+            >
+
+            <button
+              type="button"
+              id="browseButton"
+              class="primary-button"
+            >
+              Choose a Photo
+            </button>
+
+          </div>
+
+          <!-- SELECTED IMAGE -->
+          <div
+            id="imagePreview"
+            class="image-preview"
             hidden
           >
 
-          <button
-            type="button"
-            id="browseButton"
-            class="primary-button"
-          >
-            Choose a Photo
-          </button>
+            <img
+              id="roadImage"
+              alt="Selected road photograph"
+            >
+
+          </div>
+
         </div>
-      </div>
 
-      <!-- IMAGE PREVIEW -->
-      <div id="imagePreview" class="image-preview" hidden>
-        <img id="roadImage" alt="Selected road photograph">
-      </div>
-
-      <!-- IMAGE CHANGE -->
-      <div class="image-controls">
-        <button
-          type="button"
-          id="changeImageButton"
-          class="secondary-button"
-        >
-          Change Image
-        </button>
-
-        <button
-          type="button"
-          id="cameraButton"
-          class="primary-button"
-        >
-          Take a Photo
-        </button>
-      </div>
-
-      <!-- LIVE CAMERA -->
-      <section id="cameraPanel" class="camera-panel" hidden>
-        <h3>Live Rear Camera</h3>
-        <p>Position your phone towards the road.</p>
-
-        <video
-          id="cameraVideo"
-          autoplay
-          muted
-          playsinline
-        ></video>
-
-        <div class="camera-actions">
-          <button
-            type="button"
-            id="capturePhotoButton"
-            class="primary-button"
-          >
-            Capture Photo
-          </button>
+        <!-- IMAGE CONTROLS -->
+        <div class="image-controls">
 
           <button
             type="button"
-            id="cancelCameraButton"
+            id="changeImageButton"
             class="secondary-button"
           >
-            Cancel
+            Change Image
           </button>
+
+          <button
+            type="button"
+            id="cameraButton"
+            class="primary-button"
+          >
+            Take a Photo
+          </button>
+
         </div>
-      </section>
 
-      <!-- CONFIDENCE -->
-      <div class="confidence-section">
-        <label for="confidenceThreshold">
-          Detection Confidence Threshold
-        </label>
+        <!-- LIVE CAMERA -->
+        <section
+          id="cameraPanel"
+          class="camera-panel"
+          hidden
+        >
 
-        <select id="confidenceThreshold">
-          <option value="0.25" selected>25% - More detections</option>
-          <option value="0.40">40% - Balanced</option>
-          <option value="0.60">60% - Higher confidence</option>
-        </select>
+          <h3>Live Rear Camera</h3>
 
-        <p>
-          Higher confidence settings show fewer detections but require
-          stronger model predictions.
+          <p>Position your phone towards the road.</p>
+
+          <video
+            id="cameraVideo"
+            autoplay
+            muted
+            playsinline
+          ></video>
+
+          <div class="camera-actions">
+
+            <button
+              type="button"
+              id="capturePhotoButton"
+              class="primary-button"
+            >
+              Capture Photo
+            </button>
+
+            <button
+              type="button"
+              id="cancelCameraButton"
+              class="secondary-button"
+            >
+              Cancel
+            </button>
+
+          </div>
+
+        </section>
+
+        <!-- CONFIDENCE -->
+        <div class="confidence-section">
+
+          <label for="confidenceThreshold">
+            Detection Confidence Threshold
+          </label>
+
+          <select id="confidenceThreshold">
+
+            <option value="0.25" selected>
+              25% - More detections
+            </option>
+
+            <option value="0.40">
+              40% - Balanced
+            </option>
+
+            <option value="0.60">
+              60% - Higher confidence
+            </option>
+
+          </select>
+
+          <p>
+            Higher confidence settings show fewer detections but
+            require stronger model predictions.
+          </p>
+
+        </div>
+
+        <!-- GPS -->
+        <section class="gps-section">
+
+          <div class="gps-heading">
+
+            <div>
+              <h3>GPS Inspection Location</h3>
+              <p>Geographical location of the inspection.</p>
+            </div>
+
+            <span class="gps-icon">GPS</span>
+
+          </div>
+
+          <p id="locationStatus" class="location-status">
+            Location will be requested when detection starts.
+          </p>
+
+          <div class="gps-details">
+
+            <div class="gps-item">
+              <span>Latitude</span>
+              <strong id="latitude">Not available</strong>
+            </div>
+
+            <div class="gps-item">
+              <span>Longitude</span>
+              <strong id="longitude">Not available</strong>
+            </div>
+
+            <div class="gps-item">
+              <span>GPS accuracy</span>
+              <strong id="gpsAccuracy">Not available</strong>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- DETECTION BUTTON -->
+        <button
+          type="button"
+          id="detectButton"
+          class="detect-button"
+          disabled
+        >
+          DETECT POTHOLES
+        </button>
+
+        <p id="status" class="status-message" role="status">
+          Choose a road image or take a photograph to begin.
         </p>
+
+        <!-- RESULTS -->
+        <div
+          id="results"
+          class="results-container"
+          aria-live="polite"
+        ></div>
+
       </div>
-
-      <!-- GPS -->
-      <section class="gps-section">
-        <div class="gps-heading">
-          <div>
-            <h3>GPS Inspection Location</h3>
-            <p>Geographical location of the inspection.</p>
-          </div>
-
-          <span class="gps-icon">GPS</span>
-        </div>
-
-        <p id="locationStatus" class="location-status">
-          Location will be requested when detection starts.
-        </p>
-
-        <div class="gps-details">
-          <div class="gps-item">
-            <span>Latitude</span>
-            <strong id="latitude">Not available</strong>
-          </div>
-
-          <div class="gps-item">
-            <span>Longitude</span>
-            <strong id="longitude">Not available</strong>
-          </div>
-
-          <div class="gps-item">
-            <span>GPS accuracy</span>
-            <strong id="gpsAccuracy">Not available</strong>
-          </div>
-        </div>
-      </section>
-
-      <!-- DETECTION -->
-      <button
-        type="button"
-        id="detectButton"
-        class="detect-button"
-        disabled
-      >
-        DETECT POTHOLES
-      </button>
-
-      <p id="status" class="status-message" role="status">
-        Choose a road image or take a photograph to begin.
-      </p>
-
-      <div id="results" class="results-container" aria-live="polite"></div>
 
     </section>
-  </div>
 
-  <!-- POTHOLE MAP VIEW -->
-  <section id="mapView" class="map-section" hidden>
+    <!-- =================================
+         POTHOLE MAP
+    ================================== -->
 
-    <div class="section-heading">
-      <div class="section-number">03</div>
-      <div>
-        <h2>Pothole Map</h2>
-        <p>Explore the geographical locations of saved inspections.</p>
-      </div>
-    </div>
+    <section
+      id="mapView"
+      class="map-section"
+      hidden
+    >
 
-    <div class="map-summary">
-      <div class="map-stat">
-        <span>Saved inspections</span>
-        <strong id="mapInspectionCount">0</strong>
-      </div>
+      <div class="section-heading">
 
-      <div class="map-stat">
-        <span>Potholes detected</span>
-        <strong id="mapPotholeCount">0</strong>
+        <div class="section-number">02</div>
+
+        <div>
+          <h2>Pothole Map</h2>
+          <p>Explore the geographical locations of saved inspections.</p>
+        </div>
+
       </div>
 
-      <div class="map-stat">
-        <span>Locations mapped</span>
-        <strong id="mapLocationCount">0</strong>
-      </div>
-    </div>
+      <!-- MAP SUMMARY -->
+      <div class="map-summary">
 
-    <div class="map-toolbar">
-      <p id="mapStatus" role="status">
-        Sign in to load your saved inspection locations.
+        <div class="map-stat">
+          <span>Saved inspections</span>
+          <strong id="mapInspectionCount">0</strong>
+        </div>
+
+        <div class="map-stat">
+          <span>Potholes detected</span>
+          <strong id="mapPotholeCount">0</strong>
+        </div>
+
+        <div class="map-stat">
+          <span>Locations mapped</span>
+          <strong id="mapLocationCount">0</strong>
+        </div>
+
+      </div>
+
+      <!-- MAP TOOLBAR -->
+      <div class="map-toolbar">
+
+        <p id="mapStatus" role="status">
+          Loading saved inspection locations...
+        </p>
+
+        <button
+          type="button"
+          id="refreshMapButton"
+          class="primary-button"
+        >
+          Refresh Map
+        </button>
+
+      </div>
+
+      <!-- LEAFLET MAP -->
+      <div
+        id="inspectionMap"
+        aria-label="Map of saved pothole inspections"
+      ></div>
+
+      <!-- MAP LEGEND -->
+      <div class="map-legend">
+
+        <span class="legend-dot"></span>
+        <span>Saved inspection location</span>
+
+      </div>
+
+      <p class="map-disclaimer">
+        Map markers represent inspection GPS locations. They do not
+        yet represent the exact position of individual potholes.
       </p>
 
-      <button
-        type="button"
-        id="refreshMapButton"
-        class="primary-button"
-      >
-        Refresh Map
-      </button>
-    </div>
+      <p class="map-attribution">
 
-    <!-- LEAFLET MAP CONTAINER -->
-    <div
-      id="inspectionMap"
-      aria-label="Map of saved pothole inspections"
-    ></div>
+        Map data ©
 
-    <div class="map-legend">
-      <span class="legend-dot"></span>
-      <span>Saved inspection location</span>
-    </div>
+        <a
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          OpenStreetMap contributors
+        </a>
 
-    <p class="map-disclaimer">
-      Map markers represent inspection GPS locations. They do not yet
-      represent the exact position of individual potholes.
-    </p>
+      </p>
 
-    <div class="map-records">
-      <h3>Inspection Locations</h3>
-      <div id="mapRecordsList">
-        <p class="empty-map-message">No inspection locations loaded yet.</p>
-      </div>
-    </div>
+    </section>
 
-    <p class="map-attribution">
-      Map data ©
-      <a
-        href="https://www.openstreetmap.org/copyright"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        OpenStreetMap contributors
-      </a>
-    </p>
+  </main>
 
-  </section>
+  <!-- ===================================
+       FOOTER
+  ==================================== -->
 
-  <!-- INFORMATION -->
-  <section class="results-section">
-    <h2>About Pothole Vision</h2>
-    <p>
-      Pothole Vision uses artificial intelligence to identify
-      potholes in road images. Each inspection can include GPS
-      coordinates, detection confidence and inspection records.
-    </p>
-  </section>
-
-  <!-- FOOTER -->
   <footer class="app-footer">
+
     <p>POTHOLE VISION</p>
+
     <p>AI-powered road inspection and detection</p>
+
     <p class="footer-note">
       Supporting better road monitoring and safer journeys.
     </p>
+
   </footer>
 
 </div>
 
-<!-- AI AND DATABASE LIBRARIES -->
+<!-- =====================================
+     LIBRARIES
+===================================== -->
+
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- LEAFLET MAP LIBRARY -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- MAIN APPLICATION -->
-<script src="./script.js"></script>
+<!-- =====================================
+     APPLICATION SCRIPTS
+===================================== -->
 
-<!-- MAP APPLICATION -->
+<script src="./script.js"></script>
 <script src="./map.js"></script>
+
+<!-- =====================================
+     PROFILE MENU INTERACTION
+===================================== -->
+
+<script>
+(() => {
+  "use strict";
+
+  const menuButton =
+    document.getElementById("accountMenuButton");
+
+  const accountPanel =
+    document.getElementById("authUserPanel");
+
+  if (!menuButton || !accountPanel) return;
+
+  function closeAccountMenu() {
+    accountPanel.hidden = true;
+    menuButton.setAttribute("aria-expanded", "false");
+  }
+
+  function openAccountMenu() {
+    accountPanel.hidden = false;
+    menuButton.setAttribute("aria-expanded", "true");
+  }
+
+  // Profile icon opens and closes the dropdown.
+  menuButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+
+    if (accountPanel.hidden) {
+      openAccountMenu();
+    } else {
+      closeAccountMenu();
+    }
+  });
+
+  // Close when clicking elsewhere.
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".account-menu-container")) {
+      closeAccountMenu();
+    }
+  });
+
+  // Close using Escape.
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeAccountMenu();
+      menuButton.focus();
+    }
+  });
+
+  // The authentication script dispatches this event
+  // whenever the sign-in state changes.
+  window.addEventListener("potholevision:auth", (event) => {
+    const user = event.detail?.user;
+
+    if (user) {
+      menuButton.hidden = false;
+      closeAccountMenu();
+    } else {
+      menuButton.hidden = true;
+      closeAccountMenu();
+    }
+  });
+
+  // Keep the profile icon hidden before authentication.
+  menuButton.hidden = !window.PotholeVision?.currentUser;
+
+})();
+</script>
 
 </body>
 </html>

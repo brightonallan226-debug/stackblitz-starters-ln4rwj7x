@@ -1,6 +1,8 @@
+
 // ==================================================
 // POTHOLE VISION
 // YOLO26n + LIVE CAMERA + GPS + SUPABASE DATABASE
+// LOGIN-FIRST APPLICATION
 // ==================================================
 
 // CONFIGURATION
@@ -20,7 +22,10 @@ const IMAGE_SIZE = 640;
 const IOU_THRESHOLD = 0.45;
 const MAX_CANDIDATES = 300;
 
+// ==================================================
 // HTML ELEMENTS
+// ==================================================
+
 const imageInput = document.getElementById('imageInput');
 const browseButton = document.getElementById('browseButton');
 const changeImageButton = document.getElementById('changeImageButton');
@@ -45,6 +50,9 @@ const longitudeElement = document.getElementById('longitude');
 const gpsAccuracyElement = document.getElementById('gpsAccuracy');
 
 // AUTHENTICATION ELEMENTS
+const loginScreen = document.getElementById('loginScreen');
+const appWorkspace = document.getElementById('appWorkspace');
+
 const authForm = document.getElementById('authForm');
 const authEmail = document.getElementById('authEmail');
 const authPassword = document.getElementById('authPassword');
@@ -65,9 +73,10 @@ let isDetecting = false;
 let currentUser = null;
 let currentSession = null;
 let supabaseClient = null;
+let authenticationReady = false;
 
 // ==================================================
-// SUPABASE - ONE SHARED CLIENT FOR THE WHOLE APP
+// AUTHENTICATION DISPLAY
 // ==================================================
 
 function showAuthMessage(message, isError = false) {
@@ -78,23 +87,42 @@ function showAuthMessage(message, isError = false) {
 }
 
 function updateAuthDisplay() {
-  if (!authUserPanel || !authForm) return;
+  const isSignedIn = Boolean(currentUser);
 
-  if (currentUser) {
-    authForm.hidden = true;
-    authUserPanel.hidden = false;
+  // Show the account access screen only when signed out.
+  if (loginScreen) {
+    loginScreen.hidden = isSignedIn;
+  }
 
-    if (signedInEmail) {
-      signedInEmail.textContent = currentUser.email || 'Signed in';
-    }
-  } else {
-    authForm.hidden = false;
-    authUserPanel.hidden = true;
+  // Keep the entire application hidden until a user is authenticated.
+  if (appWorkspace) {
+    appWorkspace.hidden = !isSignedIn;
+  }
+
+  // The compact account controls appear in the header after login.
+  if (authUserPanel) {
+    authUserPanel.hidden = !isSignedIn;
+  }
+
+  if (authForm) {
+    authForm.hidden = isSignedIn;
+  }
+
+  if (signedInEmail && currentUser) {
+    signedInEmail.textContent = currentUser.email || 'Signed in';
+  }
+
+  // Stop the camera if the user leaves the authenticated application.
+  if (!isSignedIn) {
+    stopRearCamera();
   }
 }
 
+// ==================================================
+// SHARE AUTHENTICATION STATE WITH MAP.JS
+// ==================================================
+
 function publishAuthenticationState(eventName = 'AUTH_STATE_CHANGED') {
-  // The map listens for this event and uses this same Supabase client.
   window.dispatchEvent(new CustomEvent('potholevision:auth', {
     detail: {
       event: eventName,
@@ -104,12 +132,19 @@ function publishAuthenticationState(eventName = 'AUTH_STATE_CHANGED') {
   }));
 }
 
+// ==================================================
+// SUPABASE INITIALISATION
+// ==================================================
+
 function initialiseSupabase() {
-  // Do not create another client if this script is initialised again.
   if (supabaseClient) return true;
 
-  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
-    showAuthMessage('Supabase could not load. Refresh the page.', true);
+  if (!window.supabase ||
+      typeof window.supabase.createClient !== 'function') {
+    showAuthMessage(
+      'Supabase could not load. Refresh the page.',
+      true
+    );
     return false;
   }
 
@@ -126,54 +161,98 @@ function initialiseSupabase() {
       }
     );
 
-    // Expose the existing client and live auth state to map.js.
-    // Getter properties ensure map.js always sees the latest session.
+    // Expose the existing client to map.js.
     window.PotholeVision = window.PotholeVision || {};
+
     window.PotholeVision.supabaseClient = supabaseClient;
+
     Object.defineProperties(window.PotholeVision, {
-      currentUser: { configurable: true, get: () => currentUser },
-      currentSession: { configurable: true, get: () => currentSession }
+      currentUser: {
+        configurable: true,
+        get: () => currentUser
+      },
+      currentSession: {
+        configurable: true,
+        get: () => currentSession
+      }
     });
 
-    // Register exactly one auth listener. Supabase emits INITIAL_SESSION
-    // when it has restored the persisted login; no startup getSession()
-    // request is needed here.
+    // One authentication listener handles restored sessions,
+    // sign-in, sign-out and token refresh.
     supabaseClient.auth.onAuthStateChange((event, session) => {
       currentSession = session || null;
       currentUser = session?.user || null;
 
+      authenticationReady = true;
+
       updateAuthDisplay();
       publishAuthenticationState(event);
 
+      if (event === 'INITIAL_SESSION') {
+        if (currentUser) {
+          showAuthMessage('Welcome back.');
+        } else {
+          showAuthMessage('Sign in to access your dashboard.');
+        }
+      }
+
       if (event === 'SIGNED_IN') {
         showAuthMessage('You are successfully signed in.');
-      } else if (event === 'SIGNED_OUT') {
+      }
+
+      if (event === 'SIGNED_OUT') {
         showAuthMessage('You have signed out.');
+      }
+
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('Authentication token refreshed.');
       }
     });
 
-    // Let map.js know the shared client is ready immediately. It will
-    // receive the restored user/session in the INITIAL_SESSION event.
+    // Notify map.js that the shared client is available.
     publishAuthenticationState('CLIENT_READY');
+
     return true;
 
   } catch (error) {
     console.error('Supabase initialisation error:', error);
-    showAuthMessage('Could not connect to Supabase.', true);
+
+    showAuthMessage(
+      'Could not connect to Supabase. Refresh the page.',
+      true
+    );
+
     return false;
   }
 }
 
-function initialiseAuthentication() {
-  // Render the sign-in form immediately. Session restoration continues
-  // in the background, so the page does not wait on getSession().
-  updateAuthDisplay();
-  if (authMessage) showAuthMessage('Checking your saved sign-in...');
+// ==================================================
+// START AUTHENTICATION
+// ==================================================
 
-  if (!initialiseSupabase()) return;
+function initialiseAuthentication() {
+  // Begin with the login screen.
+  // The application workspace remains hidden until Supabase
+  // confirms a valid saved session.
+  currentUser = null;
+  currentSession = null;
+
+  updateAuthDisplay();
+
+  showAuthMessage('Checking your saved sign-in...');
+
+  if (!initialiseSupabase()) {
+    showAuthMessage(
+      'Authentication is unavailable. Please refresh the page.',
+      true
+    );
+  }
 }
 
+// ==================================================
 // CREATE ACCOUNT
+// ==================================================
+
 if (signUpButton) {
   signUpButton.addEventListener('click', async () => {
     const email = authEmail?.value.trim();
@@ -185,12 +264,18 @@ if (signUpButton) {
     }
 
     if (password.length < 8) {
-      showAuthMessage('Password must contain at least 8 characters.', true);
+      showAuthMessage(
+        'Password must contain at least 8 characters.',
+        true
+      );
       return;
     }
 
     if (!supabaseClient) {
-      showAuthMessage('Authentication is not ready. Refresh the page.', true);
+      showAuthMessage(
+        'Authentication is not ready. Refresh the page.',
+        true
+      );
       return;
     }
 
@@ -212,9 +297,12 @@ if (signUpButton) {
       if (data.session) {
         currentSession = data.session;
         currentUser = data.user || data.session.user;
+
         updateAuthDisplay();
         publishAuthenticationState('SIGNED_IN');
+
         showAuthMessage('Account created successfully.');
+
       } else {
         showAuthMessage(
           'Account created. If email confirmation is enabled, confirm your email before signing in.'
@@ -223,14 +311,22 @@ if (signUpButton) {
 
     } catch (error) {
       console.error('Sign-up error:', error);
-      showAuthMessage(error.message || 'Could not create account.', true);
+
+      showAuthMessage(
+        error.message || 'Could not create account.',
+        true
+      );
+
     } finally {
       signUpButton.disabled = false;
     }
   });
 }
 
+// ==================================================
 // SIGN IN
+// ==================================================
+
 if (signInButton) {
   signInButton.addEventListener('click', async () => {
     const email = authEmail?.value.trim();
@@ -242,7 +338,10 @@ if (signInButton) {
     }
 
     if (!supabaseClient) {
-      showAuthMessage('Authentication is not ready. Refresh the page.', true);
+      showAuthMessage(
+        'Authentication is not ready. Refresh the page.',
+        true
+      );
       return;
     }
 
@@ -250,29 +349,40 @@ if (signInButton) {
     showAuthMessage('Signing in...');
 
     try {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password
-      });
+      const { data, error } =
+        await supabaseClient.auth.signInWithPassword({
+          email,
+          password
+        });
 
       if (error) throw error;
 
       currentSession = data.session;
       currentUser = data.user;
+
       updateAuthDisplay();
       publishAuthenticationState('SIGNED_IN');
+
       showAuthMessage('Welcome to Pothole Vision.');
 
     } catch (error) {
       console.error('Sign-in error:', error);
-      showAuthMessage(error.message || 'Could not sign in.', true);
+
+      showAuthMessage(
+        error.message || 'Could not sign in.',
+        true
+      );
+
     } finally {
       signInButton.disabled = false;
     }
   });
 }
 
+// ==================================================
 // SIGN OUT
+// ==================================================
+
 if (signOutButton) {
   signOutButton.addEventListener('click', async () => {
     if (!supabaseClient) return;
@@ -281,18 +391,37 @@ if (signOutButton) {
 
     try {
       const { error } = await supabaseClient.auth.signOut();
+
       if (error) throw error;
 
-      // The shared onAuthStateChange listener also updates this state.
       currentSession = null;
       currentUser = null;
+
       updateAuthDisplay();
       publishAuthenticationState('SIGNED_OUT');
+
       showAuthMessage('You have signed out.');
+
+      // Clear the previous login credentials from the form.
+      if (authPassword) {
+        authPassword.value = '';
+      }
+
+      const showPassword = document.getElementById('showPassword');
+
+      if (showPassword) {
+        showPassword.checked = false;
+        showPassword.dispatchEvent(new Event('change'));
+      }
 
     } catch (error) {
       console.error('Sign-out error:', error);
-      showAuthMessage(error.message || 'Could not sign out.', true);
+
+      showAuthMessage(
+        error.message || 'Could not sign out.',
+        true
+      );
+
     } finally {
       signOutButton.disabled = false;
     }
@@ -320,7 +449,9 @@ function handleImageFile(file) {
   roadImage.onload = () => {
     imagePreview.hidden = false;
     detectButton.disabled = false;
+
     results.textContent = '';
+
     removeOverlay();
 
     status.textContent =
@@ -345,24 +476,18 @@ function openImageGallery() {
     return;
   }
 
-  // Clear the previous selection so the same photo can be selected again.
   imageInput.value = '';
-
-  // Open the device gallery.
   imageInput.click();
 }
 
-// CHOOSE A PHOTO BUTTON
 if (browseButton) {
   browseButton.addEventListener('click', openImageGallery);
 }
 
-// CHANGE IMAGE BUTTON
 if (changeImageButton) {
   changeImageButton.addEventListener('click', openImageGallery);
 }
 
-// PROCESS THE SELECTED GALLERY IMAGE
 if (imageInput) {
   imageInput.addEventListener('change', () => {
     const file = imageInput.files?.[0];
@@ -407,16 +532,20 @@ async function openRearCamera() {
 
   } catch (error) {
     console.error('Camera access error:', error);
+
     stopRearCamera();
 
     if (error.name === 'NotAllowedError' ||
         error.name === 'PermissionDeniedError') {
       status.textContent =
         'Camera permission denied. Allow camera access in Chrome settings.';
+
     } else if (error.name === 'NotFoundError') {
       status.textContent = 'No camera was found on this device.';
+
     } else {
-      status.textContent = 'Could not open camera: ' + error.message;
+      status.textContent =
+        'Could not open camera: ' + error.message;
     }
   }
 }
@@ -446,10 +575,12 @@ async function captureCameraPhoto() {
   }
 
   const canvas = document.createElement('canvas');
+
   canvas.width = cameraVideo.videoWidth;
   canvas.height = cameraVideo.videoHeight;
 
   const context = canvas.getContext('2d');
+
   context.drawImage(
     cameraVideo,
     0,
@@ -487,7 +618,9 @@ if (capturePhotoButton) {
 if (cancelCameraButton) {
   cancelCameraButton.addEventListener('click', () => {
     stopRearCamera();
-    status.textContent = 'Camera closed. Choose a photo or take another one.';
+
+    status.textContent =
+      'Camera closed. Choose a photo or take another one.';
   });
 }
 
@@ -505,15 +638,18 @@ function updateGPSDisplay(location) {
     latitudeElement.textContent = 'Not available';
     longitudeElement.textContent = 'Not available';
     gpsAccuracyElement.textContent = 'Not available';
+
     return;
   }
 
   latitudeElement.textContent = location.latitude.toFixed(7);
   longitudeElement.textContent = location.longitude.toFixed(7);
+
   gpsAccuracyElement.textContent =
     `${Math.round(location.accuracy)} metres`;
 
-  locationStatus.textContent = 'GPS location successfully captured.';
+  locationStatus.textContent =
+    'GPS location successfully captured.';
 }
 
 function getGPSLocation() {
@@ -545,14 +681,20 @@ function getGPSLocation() {
         let message = 'GPS location unavailable.';
 
         if (error.code === 1) {
-          message = 'Location permission denied. Detection will continue.';
+          message =
+            'Location permission denied. Detection will continue.';
+
         } else if (error.code === 2) {
-          message = 'GPS position unavailable. Detection will continue.';
+          message =
+            'GPS position unavailable. Detection will continue.';
+
         } else if (error.code === 3) {
-          message = 'GPS request timed out. Detection will continue.';
+          message =
+            'GPS request timed out. Detection will continue.';
         }
 
         locationStatus.textContent = message;
+
         updateGPSDisplay(null);
         resolve(null);
       },
@@ -577,7 +719,8 @@ async function loadModel() {
     throw new Error('ONNX Runtime could not be loaded.');
   }
 
-  status.textContent = 'Loading AI model for the first time...';
+  status.textContent =
+    'Loading AI model for the first time...';
 
   window.ort.env.wasm.wasmPaths =
     'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';
@@ -591,6 +734,7 @@ async function loadModel() {
   );
 
   console.log('Model loaded successfully.');
+
   return modelSession;
 }
 
@@ -614,6 +758,7 @@ function prepareImage(image) {
   const padY = (IMAGE_SIZE - resizedHeight) / 2;
 
   const canvas = document.createElement('canvas');
+
   canvas.width = IMAGE_SIZE;
   canvas.height = IMAGE_SIZE;
 
@@ -769,6 +914,7 @@ function removeOverlay() {
   const existing = document.getElementById('detectionOverlay');
 
   if (existing) existing.remove();
+
   overlay = null;
 }
 
@@ -776,6 +922,7 @@ function drawDetections(boxes, image) {
   removeOverlay();
 
   overlay = document.createElement('canvas');
+
   overlay.id = 'detectionOverlay';
   overlay.width = image.naturalWidth;
   overlay.height = image.naturalHeight;
@@ -783,6 +930,7 @@ function drawDetections(boxes, image) {
   const ctx = overlay.getContext('2d');
 
   ctx.lineWidth = Math.max(3, image.naturalWidth / 300);
+
   ctx.font =
     `bold ${Math.max(16, image.naturalWidth / 35)}px Arial`;
 
@@ -799,6 +947,7 @@ function drawDetections(boxes, image) {
     const labelY = Math.max(labelHeight, box.y1);
 
     ctx.fillStyle = '#b7f34a';
+
     ctx.fillRect(
       box.x1,
       labelY - labelHeight,
@@ -807,10 +956,12 @@ function drawDetections(boxes, image) {
     );
 
     ctx.fillStyle = '#101827';
+
     ctx.fillText(label, box.x1 + 7, labelY - 6);
   });
 
   imagePreview.style.position = 'relative';
+
   image.style.display = 'block';
   image.style.margin = 'auto';
 
@@ -818,10 +969,13 @@ function drawDetections(boxes, image) {
   overlay.style.top = '0';
   overlay.style.left = '50%';
   overlay.style.transform = 'translateX(-50%)';
+
   overlay.style.width =
     image.getBoundingClientRect().width + 'px';
+
   overlay.style.height =
     image.getBoundingClientRect().height + 'px';
+
   overlay.style.pointerEvents = 'none';
 
   imagePreview.appendChild(overlay);
@@ -845,12 +999,16 @@ function displayReport(
 
   function addReportLine(label, value) {
     const line = document.createElement('p');
+
     line.textContent = `${label}: ${value}`;
+
     summary.appendChild(line);
   }
 
   const heading = document.createElement('h3');
+
   heading.textContent = 'Road Inspection Report';
+
   summary.appendChild(heading);
 
   addReportLine('Total potholes detected', detections.length);
@@ -905,8 +1063,10 @@ function displayReport(
 
   } else {
     const message = document.createElement('p');
+
     message.textContent =
       'No potholes detected above the selected confidence threshold.';
+
     summary.appendChild(message);
   }
 
@@ -935,7 +1095,6 @@ async function saveInspectionToDatabase(inspection) {
     throw new Error('Please sign in before saving inspections.');
   }
 
-  // This is a per-save token check, not a second startup auth check.
   const { data: sessionData, error: sessionError } =
     await supabaseClient.auth.getSession();
 
@@ -997,124 +1156,145 @@ async function saveInspectionToDatabase(inspection) {
 // MAIN DETECTION
 // ==================================================
 
-detectButton.addEventListener('click', async () => {
-  if (isDetecting) return;
+if (detectButton) {
+  detectButton.addEventListener('click', async () => {
+    if (isDetecting) return;
 
-  if (!selectedImage) {
-    status.textContent =
-      'Please select an image or take a photo first.';
-    return;
-  }
-
-  const confidenceThreshold = confidenceSelector
-    ? Number(confidenceSelector.value)
-    : 0.25;
-
-  if (
-    !Number.isFinite(confidenceThreshold) ||
-    confidenceThreshold <= 0 ||
-    confidenceThreshold > 1
-  ) {
-    status.textContent = 'Please select a valid confidence threshold.';
-    return;
-  }
-
-  isDetecting = true;
-  detectButton.disabled = true;
-  results.textContent = '';
-  removeOverlay();
-
-  const startTime = performance.now();
-  const inspectedAt = new Date().toISOString();
-
-  try {
-    const gpsPromise = getGPSLocation();
-
-    status.textContent = 'Loading AI model...';
-    await loadModel();
-
-    status.textContent = 'Preparing road image...';
-
-    if (!roadImage.complete || !roadImage.naturalWidth) {
-      await new Promise((resolve, reject) => {
-        roadImage.onload = resolve;
-        roadImage.onerror = reject;
-      });
+    if (!currentUser) {
+      status.textContent =
+        'Please sign in before starting an inspection.';
+      return;
     }
 
-    const prepared = prepareImage(roadImage);
+    if (!selectedImage) {
+      status.textContent =
+        'Please select an image or take a photo first.';
+      return;
+    }
 
-    status.textContent =
-      `AI analysing road at ${Math.round(confidenceThreshold * 100)}% confidence...`;
+    const confidenceThreshold = confidenceSelector
+      ? Number(confidenceSelector.value)
+      : 0.25;
 
-    await new Promise(resolve => setTimeout(resolve, 30));
+    if (
+      !Number.isFinite(confidenceThreshold) ||
+      confidenceThreshold <= 0 ||
+      confidenceThreshold > 1
+    ) {
+      status.textContent =
+        'Please select a valid confidence threshold.';
+      return;
+    }
 
-    const feeds = {
-      [modelSession.inputNames[0]]: prepared.tensor
-    };
+    isDetecting = true;
 
-    const predictions = await modelSession.run(feeds);
-    const output = predictions[modelSession.outputNames[0]];
+    detectButton.disabled = true;
+    results.textContent = '';
 
-    const detections = decodePredictions(
-      output,
-      prepared,
-      confidenceThreshold
-    );
+    removeOverlay();
 
-    const location = await gpsPromise;
+    const startTime = performance.now();
+    const inspectedAt = new Date().toISOString();
 
-    drawDetections(detections, roadImage);
+    try {
+      const gpsPromise = getGPSLocation();
 
-    const elapsedTime =
-      (performance.now() - startTime) / 1000;
+      status.textContent = 'Loading AI model...';
 
-    displayReport(
-      detections,
-      elapsedTime,
-      confidenceThreshold,
-      location,
-      inspectedAt
-    );
+      await loadModel();
 
-    status.textContent = detections.length > 0
-      ? `Inspection complete: ${detections.length} pothole(s) detected.`
-      : 'Inspection complete: no potholes detected.';
+      status.textContent = 'Preparing road image...';
 
-    if (currentUser) {
-      status.textContent = 'Detection complete. Saving inspection...';
-
-      try {
-        await saveInspectionToDatabase(window.lastInspection);
-
-        status.textContent =
-          'Inspection complete and successfully saved to your account.';
-
-      } catch (saveError) {
-        console.error('Inspection saving error:', saveError);
-
-        status.textContent =
-          'Detection complete, but database saving failed: ' +
-          saveError.message;
+      if (!roadImage.complete || !roadImage.naturalWidth) {
+        await new Promise((resolve, reject) => {
+          roadImage.onload = resolve;
+          roadImage.onerror = reject;
+        });
       }
 
-    } else {
-      status.textContent +=
-        ' Sign in to save this inspection to your account.';
+      const prepared = prepareImage(roadImage);
+
+      status.textContent =
+        `AI analysing road at ${Math.round(confidenceThreshold * 100)}% confidence...`;
+
+      await new Promise(resolve => setTimeout(resolve, 30));
+
+      const feeds = {
+        [modelSession.inputNames[0]]: prepared.tensor
+      };
+
+      const predictions = await modelSession.run(feeds);
+
+      const output =
+        predictions[modelSession.outputNames[0]];
+
+      const detections = decodePredictions(
+        output,
+        prepared,
+        confidenceThreshold
+      );
+
+      const location = await gpsPromise;
+
+      drawDetections(detections, roadImage);
+
+      const elapsedTime =
+        (performance.now() - startTime) / 1000;
+
+      displayReport(
+        detections,
+        elapsedTime,
+        confidenceThreshold,
+        location,
+        inspectedAt
+      );
+
+      status.textContent = detections.length > 0
+        ? `Inspection complete: ${detections.length} pothole(s) detected.`
+        : 'Inspection complete: no potholes detected.';
+
+      if (currentUser) {
+        status.textContent =
+          'Detection complete. Saving inspection...';
+
+        try {
+          await saveInspectionToDatabase(window.lastInspection);
+
+          status.textContent =
+            'Inspection complete and successfully saved to your account.';
+
+        } catch (saveError) {
+          console.error('Inspection saving error:', saveError);
+
+          status.textContent =
+            'Detection complete, but database saving failed: ' +
+            saveError.message;
+        }
+
+      } else {
+        status.textContent +=
+          ' Sign in to save this inspection to your account.';
+      }
+
+    } catch (error) {
+      console.error('Detection error:', error);
+
+      status.textContent = 'Detection failed.';
+
+      results.textContent =
+        error.message || String(error);
+
+    } finally {
+      isDetecting = false;
+      detectButton.disabled = false;
     }
+  });
+}
 
-  } catch (error) {
-    console.error('Detection error:', error);
-    status.textContent = 'Detection failed.';
-    results.textContent = error.message || String(error);
-
-  } finally {
-    isDetecting = false;
-    detectButton.disabled = false;
-  }
-});
-
+// ==================================================
 // START APPLICATION
+// ==================================================
+
 initialiseAuthentication();
 
 console.log('Pothole Vision application initialised.');

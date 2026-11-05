@@ -718,3 +718,147 @@ select:focus-visible {
   background: var(--lime);
   color: #101827;
 }
+
+/* ==================================================
+   SELECTED IMAGE INSIDE UPLOAD BOX
+================================================== */
+
+.upload-container {
+  position: relative;
+  width: 100%;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 2px dashed #52627a;
+  border-radius: 14px;
+  background: #101827;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+/* Hide upload instructions when an image is selected */
+.upload-container:has(.image-preview:not([hidden])) .upload-content {
+  display: none;
+}
+
+/* Selected image fills the upload box */
+.upload-container .image-preview {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.upload-container .image-preview img {
+  display: block;
+  width: 100%;
+  height: 380px;
+  max-height: 60vh;
+  object-fit: contain;
+  margin: auto;
+  border: none;
+  border-radius: 8px;
+}
+
+/* Highlight box when image is selected */
+.upload-container:has(.image-preview:not([hidden])) {
+  border-style: solid;
+  border-color: #b7f34a;
+  padding: 8px;
+}
+
+/* ==========================================
+   POTHOLE VISION - PREMIUM NAVIGATION TABS
+========================================== */
+
+.app-navigation {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px !important;
+
+  width: 100%;
+  padding: 7px !important;
+  margin: 20px 0 24px !important;
+
+  background: #0d1728 !important;
+  border: 1px solid #26364c !important;
+  border-radius: 15px !important;
+
+  box-sizing: border-box;
+}
+
+.app-navigation .nav-tab {
+  position: relative;
+
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+
+  width: 100% !important;
+  min-height: 54px !important;
+  padding: 12px 10px !important;
+  margin: 0 !important;
+
+  background: transparent !important;
+  color: #a9b7ca !important;
+
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+
+  font-family: inherit;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.2px;
+
+  cursor: pointer;
+  transition:
+      background 0.2s ease,
+      color 0.2s ease,
+      border-color 0.2s ease,
+      transform 0.2s ease;
+
+  box-shadow: none !important;
+}
+
+.app-navigation .nav-tab:hover:not(.active) {
+  background: #172438 !important;
+  color: #ffffff !important;
+  border-color: #34465e !important;
+}
+
+.app-navigation .nav-tab.active {
+  background: #b7f34a !important;
+  color: #101827 !important;
+
+  border-color: #b7f34a !important;
+
+  box-shadow: 0 3px 12px #b7f34a25 !important;
+}
+
+.app-navigation .nav-tab:active {
+  transform: scale(0.98);
+}
+
+.app-navigation .nav-tab:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
+
+/* MOBILE NAVIGATION */
+
+@media (max-width: 480px) {
+  .app-navigation {
+      gap: 6px !important;
+      padding: 6px !important;
+  }
+
+  .app-navigation .nav-tab {
+      min-height: 50px !important;
+      padding: 10px 5px !important;
+      font-size: 12px !important;
+  }
+}
