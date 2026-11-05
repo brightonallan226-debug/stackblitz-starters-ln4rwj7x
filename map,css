@@ -1,9 +1,7 @@
 
-/* =========================================
-   POTHOLE VISION - OPENSTREETMAP
-========================================= */
-
-/* APPLICATION NAVIGATION */
+/* ==================================================
+   POTHOLE VISION - MAP STYLES
+================================================== */
 
 .app-navigation {
   display: grid;
@@ -26,6 +24,7 @@
   border: 1px solid transparent;
   border-radius: 8px;
   font-size: 14px;
+  font-weight: bold;
   cursor: pointer;
 }
 
@@ -35,7 +34,7 @@
   border-color: #526b35;
 }
 
-/* MAP SECTION */
+/* Map panel */
 
 .map-section {
   display: block;
@@ -46,10 +45,13 @@
   border: 1px solid #2b394e;
   border-radius: 18px;
   box-shadow: 0 18px 50px #00000030;
-  box-sizing: border-box;
 }
 
-/* SUMMARY CARDS */
+.map-section[hidden] {
+  display: none !important;
+}
+
+/* Summary statistics */
 
 .map-summary {
   display: grid;
@@ -78,7 +80,7 @@
   font-size: 23px;
 }
 
-/* MAP TOOLBAR */
+/* Toolbar */
 
 .map-toolbar {
   display: flex;
@@ -100,23 +102,22 @@
   margin: 0;
 }
 
-/* ACTUAL OPENSTREETMAP CONTAINER */
+/* CRITICAL: MAP DISPLAY AREA */
 
 #inspectionMap {
-  display: block !important;
-  position: relative !important;
-  width: 100% !important;
-  height: 480px !important;
-  min-height: 480px !important;
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 480px;
+  min-height: 380px;
   overflow: hidden;
   border: 1px solid #334155;
   border-radius: 12px;
-  background: #101827;
+  background: #26354a;
   z-index: 1;
-  box-sizing: border-box;
 }
 
-/* LEAFLET */
+/* Leaflet layout */
 
 #inspectionMap .leaflet-pane {
   z-index: 400;
@@ -127,30 +128,11 @@
   z-index: 800;
 }
 
-.leaflet-container {
-  font-family: Arial, sans-serif;
-  background: #101827;
+#inspectionMap .leaflet-control {
+  z-index: 800;
 }
 
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
-  background: #151f30;
-  color: #f8fafc;
-}
-
-.leaflet-popup-content {
-  line-height: 1.6;
-}
-
-.map-popup strong {
-  color: #b7f34a;
-}
-
-.map-popup p {
-  margin: 5px 0;
-}
-
-/* MAP LEGEND */
+/* Map legend */
 
 .map-legend {
   display: flex;
@@ -171,7 +153,7 @@
   box-shadow: 0 0 0 1px #b7f34a;
 }
 
-/* DISCLAIMER */
+/* Disclaimer */
 
 .map-disclaimer {
   color: #94a3b8;
@@ -180,7 +162,7 @@
   margin: 13px 0 22px;
 }
 
-/* INSPECTION RECORDS */
+/* Inspection records */
 
 .map-records {
   padding: 17px;
@@ -194,27 +176,20 @@
   margin: 0 0 14px;
 }
 
-/* MATCH THE CLASS USED BY map.js */
-
 .map-record-card {
-  padding: 14px;
-  margin-bottom: 12px;
-  background: #151f30;
-  border: 1px solid #334155;
-  border-radius: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid #334155;
 }
 
 .map-record-card:last-child {
-  margin-bottom: 0;
+  border-bottom: none;
 }
 
 .record-card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .record-card-header strong {
@@ -239,31 +214,35 @@
   color: #94a3b8 !important;
 }
 
+/* View on map button */
+
 .view-record-button {
   width: auto;
-  min-width: 110px;
-  margin-top: 10px;
-  padding: 9px 14px;
-  background: #26351e;
-  color: #b7f34a;
-  border: 1px solid #526b35;
-  border-radius: 7px;
-  cursor: pointer;
+  min-height: 38px;
+  margin-top: 8px;
+  padding: 8px 13px;
+  background: #26354a;
+  color: #f8fafc;
+  border: 1px solid #52627a;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: bold;
 }
 
 .view-record-button:hover {
-  background: #354b27;
+  border-color: #b7f34a;
+  color: #b7f34a;
 }
 
-/* EMPTY RECORD MESSAGE */
+/* Empty records */
 
-.empty-message,
-.empty-map-message {
+.empty-map-message,
+.empty-message {
   color: #94a3b8;
   font-size: 13px;
 }
 
-/* ATTRIBUTION */
+/* Attribution */
 
 .map-attribution {
   color: #94a3b8;
@@ -276,44 +255,85 @@
   color: #b7f34a;
 }
 
-/* MOBILE RESPONSIVENESS */
+/* Map popups */
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #151f30;
+  color: #f8fafc;
+}
+
+.leaflet-popup-content {
+  line-height: 1.6;
+}
+
+.map-popup strong {
+  color: #b7f34a;
+}
+
+.map-popup p {
+  margin: 5px 0;
+}
+
+/* Vehicle marker */
+
+.vehicle-marker-container {
+  background: transparent;
+  border: none;
+}
+
+/* GPS tracking controls */
+
+#liveTrackingControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+#trackingStatus {
+  width: 100%;
+  margin: 5px 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+/* Mobile */
 
 @media (max-width: 600px) {
-
   .map-section {
-      padding: 15px;
+    padding: 15px;
   }
 
   .map-summary {
-      grid-template-columns: 1fr;
+    grid-template-columns: 1fr;
   }
 
   .map-stat {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .map-stat span {
-      margin: 0;
+    margin: 0;
   }
 
   .map-toolbar {
-      align-items: stretch;
-      flex-direction: column;
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .map-toolbar button {
-      width: 100%;
+    width: 100%;
   }
 
   #inspectionMap {
-      height: 380px !important;
-      min-height: 380px !important;
+    height: 380px;
+    min-height: 380px;
   }
 
   .record-card-header {
-      align-items: flex-start;
-      flex-direction: column;
+    align-items: flex-start;
   }
 }

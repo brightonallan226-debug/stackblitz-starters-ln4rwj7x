@@ -7,14 +7,18 @@
   <meta name="theme-color" content="#0b1120">
   <title>Pothole Vision | AI Road Inspection</title>
 
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="map.css">
+  <!-- MAIN APPLICATION STYLES -->
+  <link rel="stylesheet" href="./styles.css">
 
-  <!-- Leaflet map styling -->
+  <!-- LEAFLET MAP STYLES -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   >
+
+  <!-- POTHOLE VISION MAP STYLES -->
+  <link rel="stylesheet" href="./map.css?v=2">
+
 </head>
 
 <body>
@@ -353,7 +357,11 @@
       </button>
     </div>
 
-    <div id="inspectionMap" aria-label="Map of saved pothole inspections"></div>
+    <!-- LEAFLET MAP CONTAINER -->
+    <div
+      id="inspectionMap"
+      aria-label="Map of saved pothole inspections"
+    ></div>
 
     <div class="map-legend">
       <span class="legend-dot"></span>
@@ -374,8 +382,11 @@
 
     <p class="map-attribution">
       Map data ©
-      <a href="https://www.openstreetmap.org/copyright"
-         target="_blank" rel="noopener noreferrer">
+      <a
+        href="https://www.openstreetmap.org/copyright"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         OpenStreetMap contributors
       </a>
     </p>
@@ -407,14 +418,14 @@
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- MAP LIBRARY -->
+<!-- LEAFLET MAP LIBRARY -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- EXISTING APPLICATION -->
-<script src="script.js"></script>
+<!-- MAIN APPLICATION -->
+<script src="./script.js"></script>
 
-<!-- NEW MAP MODULE -->
-<script src="map.js"></script>
+<!-- MAP APPLICATION -->
+<script src="./map.js"></script>
 
 </body>
 </html>

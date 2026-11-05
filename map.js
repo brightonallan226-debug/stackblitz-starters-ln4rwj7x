@@ -2,22 +2,19 @@
 (() => {
     "use strict";
 
-    // ==========================================
-    // SUPABASE CONFIGURATION
-    // ==========================================
+    // ==================================================
+    // POTHOLE VISION - MAP MODULE
+    // Shared Supabase authentication
+    // OpenStreetMap + Leaflet + Live GPS
+    // ==================================================
 
-    const SUPABASE_URL = "https://yujbvolzjgawjvwhohjf.supabase.co";
-    const SUPABASE_KEY =
-        "sb_publishable_sCj0uJc3lamhDxbyTkPqtw_dAeChOCm";
+    // Use the Supabase client created by script.js.
+    const app = window.PotholeVision;
+    const supabaseClient = app?.supabaseClient;
 
-    const supabaseClient = window.supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_KEY
-    );
-
-    // ==========================================
+    // ==================================================
     // HTML ELEMENTS
-    // ==========================================
+    // ==================================================
 
     const inspectionTab = document.getElementById("inspectionTab");
     const mapTab = document.getElementById("mapTab");
@@ -25,8 +22,11 @@
     const inspectionView = document.getElementById("inspectionView");
     const mapView = document.getElementById("mapView");
 
+    const mapElement = document.getElementById("inspectionMap");
     const mapStatus = document.getElementById("mapStatus");
-    const refreshMapButton = document.getElementById("refreshMapButton");
+
+    const refreshMapButton =
+        document.getElementById("refreshMapButton");
 
     const inspectionCountElement =
         document.getElementById("mapInspectionCount");
@@ -40,41 +40,268 @@
     const recordsListElement =
         document.getElementById("mapRecordsList");
 
-    // ==========================================
-    // APPLICATION VARIABLES
-    // ==========================================
+    // ==================================================
+    // APPLICATION STATE
+    // ==================================================
 
     let map = null;
     let markerLayer = null;
     let mapInitialised = false;
-    let currentUser = null;
     let loadingRecords = false;
+    let pendingRecordLoad = false;
 
-    // Live GPS variables
+    let currentUser = app?.currentUser || null;
+
+    // GPS tracking
     let gpsWatchId = null;
     let vehicleMarker = null;
     let accuracyCircle = null;
     let previousPosition = null;
     let currentHeading = null;
 
-    // ==========================================
-    // LIVE TRACKING CONTROLS
-    // ==========================================
+    // ==================================================
+    // STATUS MESSAGES
+    // ==================================================
+
+    function setMapStatus(message, isError = false) {
+        if (!mapStatus) return;
+
+        mapStatus.textContent = message;
+        mapStatus.style.color = isError ? "#ff7777" : "#b7f34a";
+    }
+
+    function setTrackingStatus(message, isError = false) {
+        const element = document.getElementById("trackingStatus");
+
+        if (!element) return;
+
+        element.textContent = message;
+        element.style.color = isError ? "#ff7777" : "#b7f34a";
+    }
+
+    // ==================================================
+    // AUTHENTICATION
+    // ==================================================
+
+    function handleAuthenticationChange(event) {
+        const detail = event?.detail || {};
+
+        currentUser = detail.user || app?.currentUser || null;
+
+        if (currentUser) {
+            setMapStatus("Signed in. Your inspection records are available.");
+
+            if (mapTab?.classList.contains("active")) {
+                loadInspectionRecords();
+            }
+        } else {
+            resetMapSummary();
+
+            setMapStatus(
+                "Please sign in to view your inspection records."
+            );
+        }
+    }
+
+    window.addEventListener(
+        "potholevision:auth",
+        handleAuthenticationChange
+    );
+
+    if (!supabaseClient) {
+        setMapStatus(
+            "Shared Supabase connection not found. Check script loading order.",
+            true
+        );
+    } else if (!currentUser) {
+        setMapStatus("Checking your saved sign-in...");
+    }
+
+    // ==================================================
+    // MAP CONTAINER DIMENSIONS
+    // ==================================================
+
+    function prepareMapContainer() {
+        if (!mapElement) {
+            setMapStatus(
+                "Map container not found in index.html.",
+                true
+            );
+            return false;
+        }
+
+        // Set dimensions directly to avoid depending only on CSS.
+        mapElement.style.display = "block";
+        mapElement.style.position = "relative";
+        mapElement.style.width = "100%";
+        mapElement.style.height =
+            window.innerWidth <= 600 ? "380px" : "480px";
+        mapElement.style.minHeight = "380px";
+        mapElement.style.backgroundColor = "#26354a";
+        mapElement.style.overflow = "hidden";
+        mapElement.style.zIndex = "1";
+
+        return true;
+    }
+
+    // ==================================================
+    // MAP INITIALISATION
+    // ==================================================
+
+    function initialiseMap() {
+        if (mapInitialised && map) {
+            return true;
+        }
+
+        if (!prepareMapContainer()) {
+            return false;
+        }
+
+        if (typeof L === "undefined") {
+            setMapStatus(
+                "Leaflet could not load. Check your internet connection and refresh.",
+                true
+            );
+            return false;
+        }
+
+        try {
+            // The map must be visible before Leaflet initializes.
+            if (mapView) {
+                mapView.hidden = false;
+                mapView.style.display = "block";
+            }
+
+            map = L.map(mapElement, {
+                zoomControl: true,
+                attributionControl: true
+            }).setView([-6.369, 34.888], 6);
+
+            const tileLayer = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+                    maxZoom: 19,
+                    attribution:
+                        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
+                }
+            );
+
+            tileLayer.on("tileerror", () => {
+                setMapStatus(
+                    "Map created, but some map tiles could not load. Check your internet connection.",
+                    true
+                );
+            });
+
+            tileLayer.addTo(map);
+
+            markerLayer = L.featureGroup().addTo(map);
+
+            mapInitialised = true;
+
+            // Leaflet needs a size recalculation after the tab is visible.
+            requestAnimationFrame(() => {
+                map.invalidateSize(true);
+            });
+
+            setTimeout(() => {
+                if (map) map.invalidateSize(true);
+            }, 500);
+
+            console.log("Pothole Vision Leaflet map created.");
+
+            return true;
+
+        } catch (error) {
+            console.error("Map initialisation error:", error);
+
+            setMapStatus(
+                "Map initialisation failed: " + error.message,
+                true
+            );
+
+            return false;
+        }
+    }
+
+    // ==================================================
+    // TAB NAVIGATION
+    // ==================================================
+
+    function showInspectionView() {
+        if (!inspectionView || !mapView) return;
+
+        inspectionView.hidden = false;
+        inspectionView.style.display = "block";
+
+        mapView.hidden = true;
+        mapView.style.display = "none";
+
+        inspectionTab?.classList.add("active");
+        mapTab?.classList.remove("active");
+
+        inspectionTab?.setAttribute("aria-selected", "true");
+        mapTab?.setAttribute("aria-selected", "false");
+    }
+
+    function showMapView() {
+        if (!inspectionView || !mapView) return;
+
+        inspectionView.hidden = true;
+        inspectionView.style.display = "none";
+
+        mapView.hidden = false;
+        mapView.style.display = "block";
+
+        mapTab?.classList.add("active");
+        inspectionTab?.classList.remove("active");
+
+        mapTab?.setAttribute("aria-selected", "true");
+        inspectionTab?.setAttribute("aria-selected", "false");
+
+        setMapStatus("Opening map...");
+
+        // Wait until the map section is visible before creating Leaflet.
+        requestAnimationFrame(() => {
+            const success = initialiseMap();
+
+            if (!success) return;
+
+            setTimeout(() => {
+                map.invalidateSize(true);
+
+                currentUser = app?.currentUser || currentUser;
+
+                if (currentUser) {
+                    loadInspectionRecords();
+                } else {
+                    setMapStatus(
+                        "Please sign in to view your inspection records."
+                    );
+                }
+            }, 250);
+        });
+    }
+
+    inspectionTab?.addEventListener("click", showInspectionView);
+    mapTab?.addEventListener("click", showMapView);
+
+    // ==================================================
+    // TRACKING CONTROLS
+    // ==================================================
 
     function createTrackingControls() {
         const toolbar = document.querySelector(".map-toolbar");
 
-        if (!toolbar || document.getElementById("liveTrackingControls")) {
+        if (
+            !toolbar ||
+            document.getElementById("liveTrackingControls")
+        ) {
             return;
         }
 
         const controls = document.createElement("div");
         controls.id = "liveTrackingControls";
-
-        controls.style.display = "flex";
-        controls.style.flexWrap = "wrap";
-        controls.style.gap = "8px";
-        controls.style.marginTop = "10px";
 
         const startButton = document.createElement("button");
         startButton.type = "button";
@@ -96,10 +323,6 @@
         const trackingStatus = document.createElement("p");
         trackingStatus.id = "trackingStatus";
         trackingStatus.textContent = "Live GPS tracking is off.";
-        trackingStatus.style.width = "100%";
-        trackingStatus.style.margin = "5px 0";
-        trackingStatus.style.color = "#94a3b8";
-        trackingStatus.style.fontSize = "13px";
 
         controls.appendChild(startButton);
         controls.appendChild(stopButton);
@@ -109,15 +332,6 @@
 
         startButton.addEventListener("click", startLiveTracking);
         stopButton.addEventListener("click", stopLiveTracking);
-    }
-
-    function setTrackingStatus(message, isError = false) {
-        const status = document.getElementById("trackingStatus");
-
-        if (!status) return;
-
-        status.textContent = message;
-        status.style.color = isError ? "#ff6b6b" : "#a3e635";
     }
 
     function updateTrackingButtons(isTracking) {
@@ -131,71 +345,9 @@
         if (stopButton) stopButton.disabled = !isTracking;
     }
 
-    // ==========================================
-    // TAB NAVIGATION
-    // ==========================================
-
-    function showInspectionView() {
-        inspectionView.hidden = false;
-        inspectionView.style.display = "block";
-
-        mapView.hidden = true;
-        mapView.style.display = "none";
-
-        inspectionTab.classList.add("active");
-        mapTab.classList.remove("active");
-
-        inspectionTab.setAttribute("aria-selected", "true");
-        mapTab.setAttribute("aria-selected", "false");
-    }
-
-    function showMapView() {
-        inspectionView.hidden = true;
-        inspectionView.style.display = "none";
-
-        mapView.hidden = false;
-        mapView.style.display = "block";
-
-        mapTab.classList.add("active");
-        inspectionTab.classList.remove("active");
-
-        mapTab.setAttribute("aria-selected", "true");
-        inspectionTab.setAttribute("aria-selected", "false");
-
-        setTimeout(() => {
-            initialiseMap();
-
-            if (map) {
-                map.invalidateSize();
-            }
-
-            if (currentUser) {
-                loadInspectionRecords();
-            } else {
-                setMapStatus(
-                    "Please sign in to view your inspection records."
-                );
-            }
-        }, 200);
-    }
-
-    inspectionTab.addEventListener("click", showInspectionView);
-    mapTab.addEventListener("click", showMapView);
-
-    // ==========================================
-    // STATUS
-    // ==========================================
-
-    function setMapStatus(message, isError = false) {
-        if (!mapStatus) return;
-
-        mapStatus.textContent = message;
-        mapStatus.style.color = isError ? "#ff6b6b" : "#a3e635";
-    }
-
-    // ==========================================
+    // ==================================================
     // SAFE HTML
-    // ==========================================
+    // ==================================================
 
     function escapeHTML(value) {
         return String(value ?? "").replace(/[&<>"']/g, character => {
@@ -211,51 +363,9 @@
         });
     }
 
-    // ==========================================
-    // INITIALISE OPENSTREETMAP
-    // ==========================================
-
-    function initialiseMap() {
-        if (mapInitialised) return;
-
-        const mapElement = document.getElementById("inspectionMap");
-
-        if (!mapElement) {
-            setMapStatus("Map container was not found.", true);
-            return;
-        }
-
-        if (typeof L === "undefined") {
-            setMapStatus("Leaflet map library could not load.", true);
-            return;
-        }
-
-        map = L.map("inspectionMap").setView(
-            [-6.369, 34.888],
-            6
-        );
-
-        L.tileLayer(
-            "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-            {
-                maxZoom: 19,
-                attribution:
-                    '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
-            }
-        ).addTo(map);
-
-        markerLayer = L.featureGroup().addTo(map);
-
-        mapInitialised = true;
-
-        setTimeout(() => {
-            map.invalidateSize();
-        }, 300);
-    }
-
-    // ==========================================
-    // VEHICLE DIRECTION CALCULATION
-    // ==========================================
+    // ==================================================
+    // VEHICLE DIRECTION
+    // ==================================================
 
     function calculateBearing(start, end) {
         const toRadians = degrees => degrees * Math.PI / 180;
@@ -263,10 +373,12 @@
 
         const lat1 = toRadians(start.latitude);
         const lat2 = toRadians(end.latitude);
+
         const deltaLongitude =
             toRadians(end.longitude - start.longitude);
 
-        const y = Math.sin(deltaLongitude) * Math.cos(lat2);
+        const y =
+            Math.sin(deltaLongitude) * Math.cos(lat2);
 
         const x =
             Math.cos(lat1) * Math.sin(lat2) -
@@ -276,9 +388,9 @@
         return (toDegrees(Math.atan2(y, x)) + 360) % 360;
     }
 
-    // ==========================================
-    // VEHICLE MARKER
-    // ==========================================
+    // ==================================================
+    // VEHICLE ICON
+    // ==================================================
 
     function createVehicleIcon(heading) {
         const rotation = Number.isFinite(heading) ? heading : 0;
@@ -320,9 +432,9 @@
         });
     }
 
-    // ==========================================
+    // ==================================================
     // START LIVE GPS TRACKING
-    // ==========================================
+    // ==================================================
 
     function startLiveTracking() {
         if (!navigator.geolocation) {
@@ -341,11 +453,7 @@
             return;
         }
 
-        if (!mapInitialised) {
-            initialiseMap();
-        }
-
-        if (!map) {
+        if (!initialiseMap()) {
             setTrackingStatus(
                 "The map is not ready. Please try again.",
                 true
@@ -353,12 +461,9 @@
             return;
         }
 
-        if (gpsWatchId !== null) {
-            return;
-        }
+        if (gpsWatchId !== null) return;
 
         setTrackingStatus("Requesting your phone's GPS location...");
-
         updateTrackingButtons(true);
 
         gpsWatchId = navigator.geolocation.watchPosition(
@@ -372,36 +477,32 @@
         );
     }
 
-    // ==========================================
-    // HANDLE GPS POSITION
-    // ==========================================
+    // ==================================================
+    // GPS POSITION UPDATE
+    // ==================================================
 
     function handleGPSPosition(position) {
         const latitude = position.coords.latitude;
         const longitude = position.coords.longitude;
         const accuracy = position.coords.accuracy;
 
-        const newPosition = {
-            latitude,
-            longitude
-        };
+        const newPosition = { latitude, longitude };
 
-        // Prefer the phone's GPS heading when available.
         let heading = position.coords.heading;
 
-        // Otherwise estimate direction from movement.
         if (
             heading === null ||
             !Number.isFinite(heading)
         ) {
             if (previousPosition) {
-                const distanceMoved =
-                    map.distance(
-                        [previousPosition.latitude, previousPosition.longitude],
-                        [latitude, longitude]
-                    );
+                const distanceMoved = map.distance(
+                    [
+                        previousPosition.latitude,
+                        previousPosition.longitude
+                    ],
+                    [latitude, longitude]
+                );
 
-                // Avoid unstable heading changes when stationary.
                 if (distanceMoved >= 3) {
                     heading = calculateBearing(
                         previousPosition,
@@ -421,7 +522,6 @@
 
         const coordinates = [latitude, longitude];
 
-        // Create or update vehicle marker.
         if (!vehicleMarker) {
             vehicleMarker = L.marker(
                 coordinates,
@@ -435,24 +535,20 @@
                 "<strong>Your current vehicle location</strong>"
             );
 
-            // Centre map on first GPS position.
             map.setView(coordinates, 17);
 
         } else {
             vehicleMarker.setLatLng(coordinates);
-
             vehicleMarker.setIcon(
                 createVehicleIcon(currentHeading)
             );
 
-            // Follow the vehicle while tracking.
             map.panTo(coordinates, {
                 animate: true,
                 duration: 0.5
             });
         }
 
-        // GPS accuracy circle.
         if (!accuracyCircle) {
             accuracyCircle = L.circle(
                 coordinates,
@@ -464,6 +560,7 @@
                     weight: 1
                 }
             ).addTo(map);
+
         } else {
             accuracyCircle.setLatLng(coordinates);
             accuracyCircle.setRadius(accuracy);
@@ -478,9 +575,9 @@
         );
     }
 
-    // ==========================================
+    // ==================================================
     // GPS ERRORS
-    // ==========================================
+    // ==================================================
 
     function handleGPSError(error) {
         let message = "Unable to obtain your GPS location.";
@@ -503,7 +600,6 @@
         }
 
         setTrackingStatus(message, true);
-
         updateTrackingButtons(false);
 
         if (
@@ -514,9 +610,9 @@
         }
     }
 
-    // ==========================================
-    // STOP LIVE TRACKING
-    // ==========================================
+    // ==================================================
+    // STOP GPS TRACKING
+    // ==================================================
 
     function stopLiveTracking() {
         if (gpsWatchId !== null) {
@@ -538,13 +634,12 @@
         currentHeading = null;
 
         updateTrackingButtons(false);
-
         setTrackingStatus("Live GPS tracking is off.");
     }
 
-    // ==========================================
+    // ==================================================
     // DATE FORMATTING
-    // ==========================================
+    // ==================================================
 
     function formatDate(dateValue) {
         if (!dateValue) return "Date unavailable";
@@ -558,9 +653,9 @@
         return date.toLocaleString();
     }
 
-    // ==========================================
-    // RESET MAP SUMMARY
-    // ==========================================
+    // ==================================================
+    // RESET SUMMARY
+    // ==================================================
 
     function resetMapSummary() {
         if (inspectionCountElement) {
@@ -585,9 +680,9 @@
         }
     }
 
-    // ==========================================
-    // CREATE INSPECTION MARKER
-    // ==========================================
+    // ==================================================
+    // INSPECTION MARKERS
+    // ==================================================
 
     function createInspectionMarker(record) {
         const latitude = Number(record.latitude);
@@ -604,7 +699,8 @@
             return null;
         }
 
-        const potholeCount = Number(record.total_potholes) || 0;
+        const potholeCount =
+            Number(record.total_potholes) || 0;
 
         const marker = L.circleMarker(
             [latitude, longitude],
@@ -619,7 +715,9 @@
 
         const averageConfidence =
             record.average_confidence != null
-                ? (Number(record.average_confidence) * 100).toFixed(1) + "%"
+                ? (
+                    Number(record.average_confidence) * 100
+                ).toFixed(1) + "%"
                 : "N/A";
 
         const popupContent = `
@@ -640,9 +738,9 @@
         return marker;
     }
 
-    // ==========================================
-    // DISPLAY INSPECTION RECORDS
-    // ==========================================
+    // ==================================================
+    // INSPECTION RECORD LIST
+    // ==================================================
 
     function renderRecords(records) {
         if (!recordsListElement) return;
@@ -666,6 +764,7 @@
 
                     <div class="record-card-header">
                         <strong>Inspection</strong>
+
                         <span class="record-count">
                             ${Number(record.total_potholes) || 0} potholes
                         </span>
@@ -692,26 +791,21 @@
             .forEach(button => {
                 button.addEventListener("click", () => {
                     const record = records.find(
-                        item => String(item.id) === button.dataset.recordId
+                        item =>
+                            String(item.id) === button.dataset.recordId
                     );
 
-                    if (record) {
-                        focusRecord(record);
-                    }
+                    if (record) focusRecord(record);
                 });
             });
     }
 
-    // ==========================================
-    // FOCUS ON A RECORD
-    // ==========================================
+    // ==================================================
+    // FOCUS ON INSPECTION
+    // ==================================================
 
     function focusRecord(record) {
-        if (!mapInitialised) {
-            initialiseMap();
-        }
-
-        if (!map || !markerLayer) return;
+        if (!initialiseMap()) return;
 
         const latitude = Number(record.latitude);
         const longitude = Number(record.longitude);
@@ -732,27 +826,44 @@
         });
     }
 
-    // ==========================================
+    // ==================================================
     // LOAD INSPECTION RECORDS
-    // ==========================================
+    // ==================================================
 
     async function loadInspectionRecords() {
-        if (loadingRecords) return;
+        if (loadingRecords) {
+            pendingRecordLoad = true;
+            return;
+        }
+
+        currentUser = app?.currentUser || currentUser;
 
         if (!currentUser) {
             resetMapSummary();
-            setMapStatus("Please sign in to view your inspection records.");
+
+            setMapStatus(
+                "Please sign in to view your inspection records."
+            );
+
+            return;
+        }
+
+        if (!supabaseClient) {
+            setMapStatus(
+                "Shared database connection is unavailable.",
+                true
+            );
             return;
         }
 
         loadingRecords = true;
+        pendingRecordLoad = false;
+
         setMapStatus("Loading inspection records...");
 
         try {
-            initialiseMap();
-
-            if (!mapInitialised) {
-                throw new Error("The map could not be initialised.");
+            if (!initialiseMap()) {
+                throw new Error("Map could not be initialised.");
             }
 
             const { data, error } = await supabaseClient
@@ -771,9 +882,7 @@
                 .order("inspected_at", { ascending: false })
                 .limit(1000);
 
-            if (error) {
-                throw error;
-            }
+            if (error) throw error;
 
             const records = data || [];
 
@@ -789,7 +898,9 @@
 
                 markerLayer.addLayer(marker);
 
-                totalPotholes += Number(record.total_potholes) || 0;
+                totalPotholes +=
+                    Number(record.total_potholes) || 0;
+
                 validLocations++;
             });
 
@@ -812,7 +923,6 @@
 
             renderRecords(validRecords);
 
-            // Do not move the map away from the vehicle if tracking.
             if (validLocations > 0 && !vehicleMarker) {
                 map.fitBounds(markerLayer.getBounds(), {
                     padding: [40, 40],
@@ -822,17 +932,24 @@
                 setMapStatus(
                     `${validLocations} inspection locations loaded successfully.`
                 );
+
             } else if (validLocations === 0 && !vehicleMarker) {
                 map.setView([-6.369, 34.888], 6);
 
                 setMapStatus(
                     "No inspection locations with GPS coordinates found."
                 );
+
             } else {
                 setMapStatus(
-                    `${validLocations} inspection locations loaded. Live GPS tracking is active.`
+                    `${validLocations} inspection locations loaded.`
                 );
             }
+
+            // Make sure the map tiles and markers recalculate dimensions.
+            setTimeout(() => {
+                if (map) map.invalidateSize(true);
+            }, 200);
 
         } catch (error) {
             console.error("Inspection map error:", error);
@@ -844,65 +961,17 @@
 
         } finally {
             loadingRecords = false;
-        }
-    }
 
-    // ==========================================
-    // AUTHENTICATION
-    // ==========================================
-
-    async function initialiseMapAuthentication() {
-        try {
-            const { data, error } =
-                await supabaseClient.auth.getSession();
-
-            if (error) throw error;
-
-            currentUser = data.session?.user || null;
-
-            if (currentUser) {
-                if (mapTab.classList.contains("active")) {
-                    await loadInspectionRecords();
-                }
-            } else {
-                resetMapSummary();
-                setMapStatus(
-                    "Please sign in to view your inspection records."
-                );
+            if (pendingRecordLoad && currentUser) {
+                pendingRecordLoad = false;
+                setTimeout(loadInspectionRecords, 150);
             }
-
-        } catch (error) {
-            console.error("Map authentication error:", error);
-
-            setMapStatus(
-                "Could not check your login status: " + error.message,
-                true
-            );
         }
     }
 
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-        currentUser = session?.user || null;
-
-        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-            setTimeout(() => {
-                if (mapTab.classList.contains("active")) {
-                    loadInspectionRecords();
-                }
-            }, 0);
-        }
-
-        if (event === "SIGNED_OUT") {
-            resetMapSummary();
-            setMapStatus(
-                "Please sign in to view your inspection records."
-            );
-        }
-    });
-
-    // ==========================================
-    // REFRESH INSPECTION RECORDS
-    // ==========================================
+    // ==================================================
+    // REFRESH BUTTON
+    // ==================================================
 
     if (refreshMapButton) {
         refreshMapButton.addEventListener("click", () => {
@@ -910,12 +979,30 @@
         });
     }
 
-    // ==========================================
-    // INITIALISE APPLICATION
-    // ==========================================
+    // ==================================================
+    // WINDOW RESIZE
+    // ==================================================
+
+    window.addEventListener("resize", () => {
+        if (!mapElement) return;
+
+        if (mapInitialised && map) {
+            mapElement.style.height =
+                window.innerWidth <= 600 ? "380px" : "480px";
+
+            map.invalidateSize(true);
+        }
+    });
+
+    // ==================================================
+    // APPLICATION STARTUP
+    // ==================================================
 
     createTrackingControls();
     showInspectionView();
-    initialiseMapAuthentication();
+
+    console.log(
+        "Pothole Vision map module loaded. Shared authentication enabled."
+    );
 
 })();

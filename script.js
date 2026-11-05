@@ -67,7 +67,7 @@ let currentSession = null;
 let supabaseClient = null;
 
 // ==================================================
-// SUPABASE
+// SUPABASE - ONE SHARED CLIENT FOR THE WHOLE APP
 // ==================================================
 
 function showAuthMessage(message, isError = false) {
@@ -75,26 +75,6 @@ function showAuthMessage(message, isError = false) {
 
   authMessage.textContent = message;
   authMessage.style.color = isError ? '#ff7777' : '#b7f34a';
-}
-
-function initialiseSupabase() {
-  if (!window.supabase) {
-    showAuthMessage('Supabase could not load. Refresh the page.', true);
-    return false;
-  }
-
-  try {
-    supabaseClient = window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_PUBLISHABLE_KEY
-    );
-
-    return true;
-  } catch (error) {
-    console.error('Supabase initialisation error:', error);
-    showAuthMessage('Could not connect to Supabase.', true);
-    return false;
-  }
 }
 
 function updateAuthDisplay() {
@@ -113,39 +93,84 @@ function updateAuthDisplay() {
   }
 }
 
-async function initialiseAuthentication() {
-  if (!initialiseSupabase()) return;
+function publishAuthenticationState(eventName = 'AUTH_STATE_CHANGED') {
+  // The map listens for this event and uses this same Supabase client.
+  window.dispatchEvent(new CustomEvent('potholevision:auth', {
+    detail: {
+      event: eventName,
+      user: currentUser,
+      session: currentSession
+    }
+  }));
+}
+
+function initialiseSupabase() {
+  // Do not create another client if this script is initialised again.
+  if (supabaseClient) return true;
+
+  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+    showAuthMessage('Supabase could not load. Refresh the page.', true);
+    return false;
+  }
 
   try {
-    const { data, error } =
-      await supabaseClient.auth.getSession();
+    supabaseClient = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_PUBLISHABLE_KEY,
+      {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: true
+        }
+      }
+    );
 
-    if (error) throw error;
+    // Expose the existing client and live auth state to map.js.
+    // Getter properties ensure map.js always sees the latest session.
+    window.PotholeVision = window.PotholeVision || {};
+    window.PotholeVision.supabaseClient = supabaseClient;
+    Object.defineProperties(window.PotholeVision, {
+      currentUser: { configurable: true, get: () => currentUser },
+      currentSession: { configurable: true, get: () => currentSession }
+    });
 
-    currentSession = data.session;
-    currentUser = data.session?.user || null;
-
-    updateAuthDisplay();
-
+    // Register exactly one auth listener. Supabase emits INITIAL_SESSION
+    // when it has restored the persisted login; no startup getSession()
+    // request is needed here.
     supabaseClient.auth.onAuthStateChange((event, session) => {
-      currentSession = session;
+      currentSession = session || null;
       currentUser = session?.user || null;
 
       updateAuthDisplay();
+      publishAuthenticationState(event);
 
       if (event === 'SIGNED_IN') {
         showAuthMessage('You are successfully signed in.');
-      }
-
-      if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_OUT') {
         showAuthMessage('You have signed out.');
       }
     });
 
+    // Let map.js know the shared client is ready immediately. It will
+    // receive the restored user/session in the INITIAL_SESSION event.
+    publishAuthenticationState('CLIENT_READY');
+    return true;
+
   } catch (error) {
-    console.error(error);
-    showAuthMessage('Could not check login status.', true);
+    console.error('Supabase initialisation error:', error);
+    showAuthMessage('Could not connect to Supabase.', true);
+    return false;
   }
+}
+
+function initialiseAuthentication() {
+  // Render the sign-in form immediately. Session restoration continues
+  // in the background, so the page does not wait on getSession().
+  updateAuthDisplay();
+  if (authMessage) showAuthMessage('Checking your saved sign-in...');
+
+  if (!initialiseSupabase()) return;
 }
 
 // CREATE ACCOUNT
@@ -164,26 +189,31 @@ if (signUpButton) {
       return;
     }
 
+    if (!supabaseClient) {
+      showAuthMessage('Authentication is not ready. Refresh the page.', true);
+      return;
+    }
+
     signUpButton.disabled = true;
     showAuthMessage('Creating your account...');
 
     try {
-      const { data, error } =
-        await supabaseClient.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo:
-              'https://brightonallan226-debug.github.io/stackblitz-starters-ln4rwj7x/'
-          }
-        });
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo:
+            'https://brightonallan226-debug.github.io/stackblitz-starters-ln4rwj7x/'
+        }
+      });
 
       if (error) throw error;
 
       if (data.session) {
         currentSession = data.session;
-        currentUser = data.user;
+        currentUser = data.user || data.session.user;
         updateAuthDisplay();
+        publishAuthenticationState('SIGNED_IN');
         showAuthMessage('Account created successfully.');
       } else {
         showAuthMessage(
@@ -192,8 +222,8 @@ if (signUpButton) {
       }
 
     } catch (error) {
-      console.error(error);
-      showAuthMessage(error.message, true);
+      console.error('Sign-up error:', error);
+      showAuthMessage(error.message || 'Could not create account.', true);
     } finally {
       signUpButton.disabled = false;
     }
@@ -211,27 +241,31 @@ if (signInButton) {
       return;
     }
 
+    if (!supabaseClient) {
+      showAuthMessage('Authentication is not ready. Refresh the page.', true);
+      return;
+    }
+
     signInButton.disabled = true;
     showAuthMessage('Signing in...');
 
     try {
-      const { data, error } =
-        await supabaseClient.auth.signInWithPassword({
-          email,
-          password
-        });
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      });
 
       if (error) throw error;
 
       currentSession = data.session;
       currentUser = data.user;
-
       updateAuthDisplay();
+      publishAuthenticationState('SIGNED_IN');
       showAuthMessage('Welcome to Pothole Vision.');
 
     } catch (error) {
-      console.error(error);
-      showAuthMessage(error.message, true);
+      console.error('Sign-in error:', error);
+      showAuthMessage(error.message || 'Could not sign in.', true);
     } finally {
       signInButton.disabled = false;
     }
@@ -247,18 +281,18 @@ if (signOutButton) {
 
     try {
       const { error } = await supabaseClient.auth.signOut();
-
       if (error) throw error;
 
+      // The shared onAuthStateChange listener also updates this state.
       currentSession = null;
       currentUser = null;
-
       updateAuthDisplay();
+      publishAuthenticationState('SIGNED_OUT');
       showAuthMessage('You have signed out.');
 
     } catch (error) {
-      console.error(error);
-      showAuthMessage(error.message, true);
+      console.error('Sign-out error:', error);
+      showAuthMessage(error.message || 'Could not sign out.', true);
     } finally {
       signOutButton.disabled = false;
     }
@@ -301,7 +335,7 @@ function handleImageFile(file) {
 }
 
 // ==================================================
-// GALLERY BUTTON CONNECTIONS - CORRECTED
+// GALLERY BUTTON CONNECTIONS
 // ==================================================
 
 function openImageGallery() {
@@ -678,37 +712,26 @@ function nonMaximumSuppression(boxes) {
 }
 
 // ==================================================
-// DECODE YOLO OUTPUT
+// DECODE YOLO26n PREDICTIONS
 // ==================================================
 
 function decodePredictions(output, transform, confidenceThreshold) {
   const data = output.data;
-  const dimensions = output.dims;
-
-  if (
-    dimensions.length !== 3 ||
-    dimensions[1] !== 5 ||
-    dimensions[2] !== 8400
-  ) {
-    throw new Error(
-      'Unexpected model output shape: ' +
-      JSON.stringify(dimensions)
-    );
-  }
-
   const candidates = [];
 
-  for (let i = 0; i < 8400; i++) {
-    const score = data[4 * 8400 + i];
+  const numberOfPredictions = 8400;
+
+  for (let i = 0; i < numberOfPredictions; i++) {
+    const score = data[4 * numberOfPredictions + i];
 
     if (!Number.isFinite(score) || score < confidenceThreshold) {
       continue;
     }
 
     const cx = data[i];
-    const cy = data[8400 + i];
-    const width = data[2 * 8400 + i];
-    const height = data[3 * 8400 + i];
+    const cy = data[numberOfPredictions + i];
+    const width = data[2 * numberOfPredictions + i];
+    const height = data[3 * numberOfPredictions + i];
 
     const x1 =
       (cx - width / 2 - transform.padX) / transform.scale;
@@ -912,6 +935,7 @@ async function saveInspectionToDatabase(inspection) {
     throw new Error('Please sign in before saving inspections.');
   }
 
+  // This is a per-save token check, not a second startup auth check.
   const { data: sessionData, error: sessionError } =
     await supabaseClient.auth.getSession();
 
