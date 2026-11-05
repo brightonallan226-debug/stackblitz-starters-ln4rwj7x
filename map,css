@@ -3,6 +3,10 @@
    POTHOLE VISION - MAP STYLES
 ================================================== */
 
+/* ==========================================
+   NAVIGATION TABS
+========================================== */
+
 .app-navigation {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -34,10 +38,12 @@
   border-color: #526b35;
 }
 
-/* MAP PANEL */
+/* ==========================================
+   MAP PANEL
+========================================== */
 
 .map-section {
-  display: block !important;
+  display: block;
   width: 100%;
   margin-bottom: 25px;
   padding: 22px;
@@ -45,14 +51,15 @@
   border: 1px solid #2b394e;
   border-radius: 18px;
   box-shadow: 0 18px 50px #00000030;
-  overflow: visible;
 }
 
 .map-section[hidden] {
   display: none !important;
 }
 
-/* SUMMARY STATISTICS */
+/* ==========================================
+   SUMMARY STATISTICS
+========================================== */
 
 .map-summary {
   display: grid;
@@ -81,14 +88,17 @@
   font-size: 23px;
 }
 
-/* TOOLBAR */
+/* ==========================================
+   MAP TOOLBAR
+========================================== */
 
 .map-toolbar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
   margin-bottom: 14px;
 }
 
@@ -104,51 +114,136 @@
   margin: 0;
 }
 
-/* LIVE TRACKING CONTROLS */
+/* ==========================================
+   REFRESH MAP BUTTON
+========================================== */
+
+#refreshMapButton {
+  display: inline-flex !important;
+  flex: 0 0 145px !important;
+
+  width: 145px !important;
+  min-width: 145px !important;
+  max-width: 145px !important;
+
+  height: 46px !important;
+  min-height: 46px !important;
+
+  padding: 8px 10px !important;
+  margin: 0 !important;
+
+  align-items: center !important;
+  justify-content: center !important;
+
+  white-space: nowrap !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+
+  box-sizing: border-box !important;
+  border-radius: 10px;
+}
+
+/* ==========================================
+   LIVE TRACKING CONTROLS
+========================================== */
 
 #liveTrackingControls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  width: 100%;
-  margin-top: 10px;
-}
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
 
-#trackingStatus {
-  width: 100%;
-  margin: 5px 0;
-  color: #94a3b8;
-  font-size: 13px;
-}
+  justify-content: flex-start !important;
+  align-items: center !important;
 
-/* ==================================================
-   MAP DISPLAY - PROTECTED DIMENSIONS
-================================================== */
-
-#inspectionMap {
-  display: block !important;
-  position: relative !important;
+  gap: 8px !important;
 
   width: 100% !important;
-  height: 480px !important;
-  min-height: 480px !important;
+  margin: 10px 0 !important;
+  padding: 0 !important;
 
-  flex: 0 0 480px !important;
+  box-sizing: border-box !important;
+}
 
-  visibility: visible !important;
-  opacity: 1 !important;
+/* START AND STOP BUTTONS */
 
-  overflow: hidden !important;
+#liveTrackingControls #startTrackingButton,
+#liveTrackingControls #stopTrackingButton {
+  display: inline-flex !important;
 
+  flex: 0 0 145px !important;
+
+  width: 145px !important;
+  min-width: 145px !important;
+  max-width: 145px !important;
+
+  height: 46px !important;
+  min-height: 46px !important;
+  max-height: 46px !important;
+
+  padding: 8px 10px !important;
+  margin: 0 !important;
+
+  align-items: center !important;
+  justify-content: center !important;
+
+  white-space: nowrap !important;
+
+  font-size: 12px !important;
+  line-height: 1 !important;
+
+  border-radius: 10px;
+  box-sizing: border-box !important;
+}
+
+/* GPS TRACKING STATUS */
+
+#liveTrackingControls #trackingStatus {
+  display: block !important;
+
+  flex: 0 0 100% !important;
+
+  width: 100% !important;
+  margin: 4px 0 0 !important;
+  padding: 0 !important;
+
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.5;
+
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+
+  box-sizing: border-box !important;
+}
+
+/* DISABLED STOP BUTTON */
+
+#liveTrackingControls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ==========================================
+   CRITICAL: MAP DISPLAY AREA
+========================================== */
+
+#inspectionMap {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 480px;
+  min-height: 380px;
+  overflow: hidden;
   border: 1px solid #334155;
   border-radius: 12px;
   background: #26354a;
-
   z-index: 1;
-  isolation: isolate;
 }
 
-/* LEAFLET LAYOUT */
+/* ==========================================
+   LEAFLET LAYOUT
+========================================== */
 
 #inspectionMap .leaflet-pane {
   z-index: 400;
@@ -163,7 +258,9 @@
   z-index: 800;
 }
 
-/* MAP LEGEND */
+/* ==========================================
+   MAP LEGEND
+========================================== */
 
 .map-legend {
   display: flex;
@@ -184,7 +281,9 @@
   box-shadow: 0 0 0 1px #b7f34a;
 }
 
-/* DISCLAIMER */
+/* ==========================================
+   MAP DISCLAIMER
+========================================== */
 
 .map-disclaimer {
   color: #94a3b8;
@@ -193,7 +292,9 @@
   margin: 13px 0 22px;
 }
 
-/* INSPECTION RECORDS */
+/* ==========================================
+   INSPECTION RECORDS
+========================================== */
 
 .map-records {
   padding: 17px;
@@ -245,7 +346,9 @@
   color: #94a3b8 !important;
 }
 
-/* VIEW ON MAP BUTTON */
+/* ==========================================
+   VIEW ON MAP BUTTON
+========================================== */
 
 .view-record-button {
   width: auto;
@@ -265,7 +368,9 @@
   color: #b7f34a;
 }
 
-/* EMPTY RECORDS */
+/* ==========================================
+   EMPTY RECORDS
+========================================== */
 
 .empty-map-message,
 .empty-message {
@@ -273,7 +378,9 @@
   font-size: 13px;
 }
 
-/* ATTRIBUTION */
+/* ==========================================
+   MAP ATTRIBUTION
+========================================== */
 
 .map-attribution {
   color: #94a3b8;
@@ -286,7 +393,9 @@
   color: #b7f34a;
 }
 
-/* MAP POPUPS */
+/* ==========================================
+   MAP POPUPS
+========================================== */
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
@@ -306,16 +415,29 @@
   margin: 5px 0;
 }
 
-/* VEHICLE MARKER */
+/* ==========================================
+   VEHICLE MARKER
+========================================== */
 
 .vehicle-marker-container {
   background: transparent;
   border: none;
 }
 
-/* MOBILE */
+/* ==========================================
+   ROAD HAZARD ALERT BOX
+   INTENTIONALLY NOT OVERRIDDEN
+========================================== */
+
+/* Existing alert panel styling and functionality
+   remain controlled by map.js and its existing styles. */
+
+/* ==========================================
+   MOBILE
+========================================== */
 
 @media (max-width: 600px) {
+
   .map-section {
     padding: 15px;
   }
@@ -335,20 +457,28 @@
   }
 
   .map-toolbar {
-    align-items: stretch;
+    align-items: flex-start;
     flex-direction: column;
   }
 
-  .map-toolbar button {
-    width: 100%;
+  #refreshMapButton {
+    width: 145px !important;
+  }
+
+  #liveTrackingControls {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  #liveTrackingControls #startTrackingButton,
+  #liveTrackingControls #stopTrackingButton {
+    flex: 0 0 145px !important;
+    width: 145px !important;
   }
 
   #inspectionMap {
-    display: block !important;
-    width: 100% !important;
-    height: 380px !important;
-    min-height: 380px !important;
-    flex: 0 0 380px !important;
+    height: 380px;
+    min-height: 380px;
   }
 
   .record-card-header {

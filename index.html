@@ -17,11 +17,51 @@
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   >
 
-  <link rel="stylesheet" href="./map.css?v=2">
+  <!-- UPDATED MAP STYLESHEET -->
+  <link rel="stylesheet" href="./map.css?v=3">
 
   <style>
     [hidden] {
       display: none !important;
+    }
+
+    /* =====================================
+       INTRODUCTION
+    ===================================== */
+
+    .intro-section {
+      display: block;
+      margin: 28px 0 30px;
+      padding: 0 6px;
+    }
+
+    .intro-section .eyebrow {
+      color: #b7f34a;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+    }
+
+    .intro-section h2 {
+      color: #f8fafc;
+      font-size: clamp(27px, 6vw, 38px);
+      line-height: 1.15;
+      font-weight: 800;
+      letter-spacing: -1.2px;
+      margin: 0 0 14px;
+    }
+
+    .intro-section h2 span {
+      color: #b7f34a;
+    }
+
+    .intro-section > p:last-child {
+      color: #94a3b8;
+      font-size: 14px;
+      line-height: 1.7;
+      max-width: 480px;
+      margin: 0;
     }
 
     /* =====================================
@@ -30,7 +70,7 @@
 
     .login-screen {
       max-width: 520px;
-      margin: 30px auto;
+      margin: 25px auto;
       padding: 24px;
       background: #151f30;
       border: 1px solid #334155;
@@ -150,8 +190,13 @@
       box-sizing: border-box;
     }
 
-    .account-dropdown[hidden] {
+    .account-dropdown[hidden],
+    .account-dropdown:not(.account-menu-open) {
       display: none !important;
+    }
+
+    .account-dropdown.account-menu-open {
+      display: block !important;
     }
 
     .account-user-info {
@@ -278,6 +323,8 @@
       width: 100%;
       height: 480px;
       min-height: 380px;
+      border-radius: 12px;
+      overflow: hidden;
     }
 
     /* =====================================
@@ -285,6 +332,10 @@
     ===================================== */
 
     @media (max-width: 600px) {
+      .intro-section {
+        margin: 24px 0 26px;
+      }
+
       .upload-container .image-preview img {
         height: 320px;
       }
@@ -315,14 +366,12 @@
   <header class="app-header">
 
     <div class="brand">
-
       <div class="brand-icon">PV</div>
 
       <div>
         <h1>POTHOLE VISION</h1>
         <p>AI ROAD INSPECTION & MAPPING</p>
       </div>
-
     </div>
 
     <div class="header-status">
@@ -331,6 +380,7 @@
     </div>
 
     <!-- PROFILE MENU -->
+
     <div class="account-menu-container">
 
       <button
@@ -359,6 +409,7 @@
       </button>
 
       <!-- ACCOUNT DROPDOWN -->
+
       <div
         id="authUserPanel"
         class="account-dropdown"
@@ -383,6 +434,27 @@
     </div>
 
   </header>
+
+  <!-- ===================================
+       ROAD SAFETY INTRODUCTION
+       ALWAYS VISIBLE
+  ==================================== -->
+
+  <section class="intro-section">
+
+    <p class="eyebrow">ROAD SAFETY TECHNOLOGY</p>
+
+    <h2>
+      Detect potholes.<br>
+      <span>Improve roads.</span>
+    </h2>
+
+    <p>
+      Capture road images, detect potholes using artificial
+      intelligence, and record their geographical locations.
+    </p>
+
+  </section>
 
   <!-- ===================================
        LOGIN SCREEN
@@ -484,6 +556,7 @@
   <main id="appWorkspace" hidden>
 
     <!-- NAVIGATION -->
+
     <nav
       class="app-navigation"
       aria-label="Main application sections"
@@ -529,6 +602,7 @@
         </div>
 
         <!-- IMAGE UPLOAD BOX -->
+
         <div class="upload-container">
 
           <div class="upload-content">
@@ -556,7 +630,8 @@
 
           </div>
 
-          <!-- SELECTED IMAGE -->
+          <!-- IMAGE PREVIEW -->
+
           <div
             id="imagePreview"
             class="image-preview"
@@ -573,6 +648,7 @@
         </div>
 
         <!-- IMAGE CONTROLS -->
+
         <div class="image-controls">
 
           <button
@@ -593,7 +669,8 @@
 
         </div>
 
-        <!-- LIVE CAMERA -->
+        <!-- CAMERA -->
+
         <section
           id="cameraPanel"
           class="camera-panel"
@@ -634,6 +711,7 @@
         </section>
 
         <!-- CONFIDENCE -->
+
         <div class="confidence-section">
 
           <label for="confidenceThreshold">
@@ -664,6 +742,7 @@
         </div>
 
         <!-- GPS -->
+
         <section class="gps-section">
 
           <div class="gps-heading">
@@ -702,7 +781,8 @@
 
         </section>
 
-        <!-- DETECTION BUTTON -->
+        <!-- DETECTION -->
+
         <button
           type="button"
           id="detectButton"
@@ -717,6 +797,7 @@
         </p>
 
         <!-- RESULTS -->
+
         <div
           id="results"
           class="results-container"
@@ -748,32 +829,9 @@
 
       </div>
 
-      <!-- MAP SUMMARY -->
-      <div class="map-summary">
-
-        <div class="map-stat">
-          <span>Saved inspections</span>
-          <strong id="mapInspectionCount">0</strong>
-        </div>
-
-        <div class="map-stat">
-          <span>Potholes detected</span>
-          <strong id="mapPotholeCount">0</strong>
-        </div>
-
-        <div class="map-stat">
-          <span>Locations mapped</span>
-          <strong id="mapLocationCount">0</strong>
-        </div>
-
-      </div>
-
       <!-- MAP TOOLBAR -->
-      <div class="map-toolbar">
 
-        <p id="mapStatus" role="status">
-          Loading saved inspection locations...
-        </p>
+      <div class="map-toolbar">
 
         <button
           type="button"
@@ -786,12 +844,14 @@
       </div>
 
       <!-- LEAFLET MAP -->
+
       <div
         id="inspectionMap"
         aria-label="Map of saved pothole inspections"
       ></div>
 
       <!-- MAP LEGEND -->
+
       <div class="map-legend">
 
         <span class="legend-dot"></span>
@@ -874,34 +934,38 @@
   if (!menuButton || !accountPanel) return;
 
   function closeAccountMenu() {
+    accountPanel.classList.remove("account-menu-open");
     accountPanel.hidden = true;
+
     menuButton.setAttribute("aria-expanded", "false");
   }
 
   function openAccountMenu() {
     accountPanel.hidden = false;
+    accountPanel.classList.add("account-menu-open");
+
     menuButton.setAttribute("aria-expanded", "true");
   }
 
-  // Profile icon opens and closes the dropdown.
+  // Toggle profile menu.
   menuButton.addEventListener("click", (event) => {
     event.stopPropagation();
 
-    if (accountPanel.hidden) {
-      openAccountMenu();
-    } else {
+    if (accountPanel.classList.contains("account-menu-open")) {
       closeAccountMenu();
+    } else {
+      openAccountMenu();
     }
   });
 
-  // Close when clicking elsewhere.
+  // Close menu when clicking outside.
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".account-menu-container")) {
       closeAccountMenu();
     }
   });
 
-  // Close using Escape.
+  // Close with Escape.
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeAccountMenu();
@@ -909,8 +973,7 @@
     }
   });
 
-  // The authentication script dispatches this event
-  // whenever the sign-in state changes.
+  // Respond to authentication changes.
   window.addEventListener("potholevision:auth", (event) => {
     const user = event.detail?.user;
 
@@ -923,8 +986,10 @@
     }
   });
 
-  // Keep the profile icon hidden before authentication.
-  menuButton.hidden = !window.PotholeVision?.currentUser;
+  // Initial profile icon state.
+  const initialUser = window.PotholeVision?.currentUser;
+
+  menuButton.hidden = !initialUser;
 
 })();
 </script>
