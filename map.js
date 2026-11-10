@@ -1,1428 +1,1350 @@
 
+"use strict";
+
+/* ============================================================
+   POTHOLE VISION
+   MAP-FIRST NAVIGATION — STABLE TEST VERSION
+
+   Login
+      ↓
+   OpenStreetMap
+      ↓
+   Request phone GPS
+      ↓
+   Navigate to user's location
+      ↓
+   Follow phone movement
+      ↓
+   Record Pothole
+      ↓
+   Existing camera and AI detection workflow
+
+   ============================================================ */
+
 (() => {
-    "use strict";
 
-    // =========================================================
-    // POTHOLE VISION - MAP, GPS AND PROXIMITY ALERTS
-    // =========================================================
+    /* ========================================================
+       CONFIGURATION
+    ======================================================== */
 
-    const app = window.PotholeVision;
-    const supabaseClient = app?.supabaseClient;
+    const CONFIG = {
+        initialCenter: [0, 0],
+        initialZoom: 2,
 
-    // Alert distances in metres.
-    const WARNING_DISTANCE = 300;
-    const DANGER_DISTANCE = 100;
-    const ALERT_RESET_DISTANCE = 450;
-    const MAX_ALERT_GPS_ACCURACY = 100;
+        destinationZoom: 17,
+        destinationPitch: 50,
 
-    // =========================================================
-    // HTML ELEMENTS
-    // =========================================================
+        enableHighAccuracy: true,
+        gpsTimeout: 30000,
+        gpsMaximumAge: 1000,
 
-    const inspectionTab = document.getElementById("inspectionTab");
-    const mapTab = document.getElementById("mapTab");
-
-    const inspectionView = document.getElementById("inspectionView");
-    const mapView = document.getElementById("mapView");
-
-    const mapStatus = document.getElementById("mapStatus");
-    const refreshMapButton = document.getElementById("refreshMapButton");
-
-    const inspectionCountElement =
-        document.getElementById("mapInspectionCount");
-
-    const potholeCountElement =
-        document.getElementById("mapPotholeCount");
-
-    const locationCountElement =
-        document.getElementById("mapLocationCount");
-
-    const recordsListElement =
-        document.getElementById("mapRecordsList");
-
-    const mapElement = document.getElementById("inspectionMap");
-
-    // =========================================================
-    // APPLICATION VARIABLES
-    // =========================================================
+        followUser: true
+    };
 
     let map = null;
-    let markerLayer = null;
-    let mapInitialised = false;
+    let userMarker = null;
 
-    let currentUser = app?.currentUser || null;
-
-    let loadingRecords = false;
-    let pendingRecordLoad = false;
-
-    let inspectionRecords = [];
-
-    // GPS
-    let gpsWatchId = null;
-    let vehicleMarker = null;
-    let accuracyCircle = null;
-
+    let currentPosition = null;
     let previousPosition = null;
-    let currentHeading = null;
 
-    // Alerts
-    let soundEnabled = false;
-    let notificationPermission = "default";
-    let audioContext = null;
+    let gpsWatchId = null;
+    let gpsStarted = false;
 
-    let alertPanel = null;
-    let alertStatus = null;
-    let alertEnableButton = null;
+    let authenticated = false;
+    let mapInitialized = false;
+    let firstGPSFix = false;
 
-    const alertStates = new Map();
+    let globeScreen = null;
+    let mapElement = null;
+    let gpsStatus = null;
+    let locationTitle = null;
+    let locationCoordinates = null;
+    let recordButton = null;
 
-    // =========================================================
-    // STATUS HELPERS
-    // =========================================================
+    /* ========================================================
+       STYLES
+    ======================================================== */
 
-    function setMapStatus(message, isError = false) {
-        if (!mapStatus) return;
+    function installStyles() {
 
-        mapStatus.textContent = message;
-        mapStatus.style.color = isError ? "#ff6b6b" : "#a3e635";
-    }
-
-    function setTrackingStatus(message, isError = false) {
-        const status = document.getElementById("trackingStatus");
-
-        if (!status) return;
-
-        status.textContent = message;
-        status.style.color = isError ? "#ff6b6b" : "#a3e635";
-    }
-
-    // =========================================================
-    // MAP DISPLAY FIX
-    // =========================================================
-
-    function prepareMapContainer() {
-        if (!mapElement) {
-            setMapStatus("Map container was not found.", true);
-            return false;
+        if (document.getElementById("pv-map-styles")) {
+            return;
         }
 
-        mapElement.style.setProperty("display", "block", "important");
-        mapElement.style.setProperty("position", "relative", "important");
-        mapElement.style.setProperty("width", "100%", "important");
-        mapElement.style.setProperty("height", "480px", "important");
-        mapElement.style.setProperty("min-height", "380px", "important");
-        mapElement.style.setProperty("visibility", "visible", "important");
-        mapElement.style.setProperty("opacity", "1", "important");
-        mapElement.style.setProperty("overflow", "hidden", "important");
-        mapElement.style.setProperty("flex", "none", "important");
+        const style = document.createElement("style");
 
-        return true;
-    }
+        style.id = "pv-map-styles";
 
-    function refreshMapSize() {
-        if (!map) return;
+        style.textContent = `
 
-        prepareMapContainer();
+            #pv-globe-screen {
+                position: fixed;
+                inset: 0;
+                z-index: 99999;
+                display: none;
+                overflow: hidden;
+                background: #050914;
+                font-family: Arial, sans-serif;
+            }
 
-        requestAnimationFrame(() => {
-            map.invalidateSize({ pan: false });
+            #pv-globe-screen.pv-active {
+                display: block;
+            }
 
-            setTimeout(() => {
-                if (map) {
-                    map.invalidateSize({ pan: false });
+            #pv-globe-map {
+                position: absolute;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                background: #e8edf0;
+            }
+
+            .pv-map-top {
+                position: absolute;
+                top: max(12px, env(safe-area-inset-top));
+                left: 12px;
+                right: 12px;
+                z-index: 10;
+
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+
+                gap: 10px;
+                pointer-events: none;
+            }
+
+            .pv-brand {
+                color: #ffffff;
+                font-size: 13px;
+                font-weight: 900;
+                letter-spacing: 2px;
+
+                text-shadow: 0 2px 8px #000;
+            }
+
+            .pv-brand span {
+                color: #b7f34a;
+            }
+
+            .pv-gps-status {
+                max-width: 65%;
+                padding: 10px 13px;
+
+                color: #ffffff;
+                background: rgba(8, 17, 30, 0.92);
+
+                border: 1px solid rgba(183, 243, 74, 0.35);
+                border-radius: 30px;
+
+                font-size: 11px;
+                text-align: center;
+
+                backdrop-filter: blur(12px);
+            }
+
+            .pv-gps-status::before {
+                content: "";
+
+                display: inline-block;
+
+                width: 7px;
+                height: 7px;
+
+                margin-right: 7px;
+
+                border-radius: 50%;
+                background: #facc15;
+
+                vertical-align: middle;
+            }
+
+            .pv-gps-status.pv-connected::before {
+                background: #b7f34a;
+                box-shadow: 0 0 9px #b7f34a;
+            }
+
+            .pv-gps-status.pv-error::before {
+                background: #ef4444;
+            }
+
+            .pv-location-card {
+                position: absolute;
+
+                left: 12px;
+                bottom: calc(105px + env(safe-area-inset-bottom));
+
+                z-index: 10;
+
+                max-width: 220px;
+
+                padding: 13px 15px;
+
+                color: #ffffff;
+
+                background: rgba(8, 17, 30, 0.90);
+
+                border: 1px solid rgba(255,255,255,0.15);
+                border-radius: 14px;
+
+                font-size: 11px;
+
+                backdrop-filter: blur(12px);
+
+                pointer-events: none;
+            }
+
+            .pv-location-card strong {
+                display: block;
+
+                margin-bottom: 6px;
+
+                color: #b7f34a;
+
+                font-size: 12px;
+            }
+
+            .pv-location-card span {
+                overflow-wrap: anywhere;
+            }
+
+            .pv-record-button {
+                position: absolute;
+
+                left: 50%;
+                bottom: calc(24px + env(safe-area-inset-bottom));
+
+                transform: translateX(-50%);
+
+                z-index: 20;
+
+                width: min(270px, calc(100% - 40px));
+                min-height: 58px;
+
+                border: none;
+                border-radius: 40px;
+
+                background: #b7f34a;
+                color: #101827;
+
+                font-size: 14px;
+                font-weight: 900;
+                letter-spacing: 0.6px;
+
+                box-shadow: 0 8px 30px rgba(183,243,74,0.25);
+
+                cursor: pointer;
+            }
+
+            .pv-record-button:active {
+                transform: translateX(-50%) scale(0.97);
+            }
+
+            .pv-record-button:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+
+            .pv-user-marker {
+                width: 30px;
+                height: 30px;
+                position: relative;
+            }
+
+            .pv-user-marker .pv-pulse {
+                position: absolute;
+                inset: 0;
+
+                border-radius: 50%;
+
+                background: rgba(183,243,74,0.30);
+
+                animation: pv-location-pulse 2s infinite;
+            }
+
+            .pv-user-marker .pv-dot {
+                position: absolute;
+
+                width: 14px;
+                height: 14px;
+
+                top: 8px;
+                left: 8px;
+
+                border-radius: 50%;
+
+                background: #b7f34a;
+
+                border: 3px solid white;
+
+                box-shadow: 0 0 14px #b7f34a;
+            }
+
+            @keyframes pv-location-pulse {
+
+                0% {
+                    transform: scale(0.8);
+                    opacity: 0.9;
                 }
-            }, 300);
-        });
-    }
 
-    // =========================================================
-    // AUTHENTICATION
-    // =========================================================
-
-    function handleAuthenticationChange(event) {
-        const detail = event?.detail || {};
-
-        currentUser = detail.user || app?.currentUser || null;
-
-        if (currentUser) {
-            setMapStatus("Signed in. Your inspection records are available.");
-
-            if (mapTab?.classList.contains("active")) {
-                loadInspectionRecords();
-            }
-        } else {
-            inspectionRecords = [];
-            resetMapSummary();
-
-            if (detail.event === "CLIENT_READY") {
-                setMapStatus("Checking your saved sign-in...");
-            } else {
-                setMapStatus(
-                    "Please sign in to view your inspection records."
-                );
-            }
-        }
-    }
-
-    window.addEventListener(
-        "potholevision:auth",
-        handleAuthenticationChange
-    );
-
-    if (!supabaseClient) {
-        setMapStatus(
-            "Shared Supabase connection was not found. Check script.js loading order.",
-            true
-        );
-    }
-
-    // =========================================================
-    // TRACKING CONTROLS
-    // =========================================================
-
-    function createTrackingControls() {
-        const toolbar = document.querySelector(".map-toolbar");
-
-        if (!toolbar ||
-            document.getElementById("liveTrackingControls")) {
-            return;
-        }
-
-        const controls = document.createElement("div");
-        controls.id = "liveTrackingControls";
-
-        controls.style.cssText =
-            "display:flex;flex-wrap:wrap;gap:8px;width:100%;margin-top:10px;";
-
-        const startButton = document.createElement("button");
-        startButton.type = "button";
-        startButton.id = "startTrackingButton";
-        startButton.textContent = "Start Live Tracking";
-        startButton.className = "primary-button";
-        startButton.style.width = "auto";
-        startButton.style.margin = "0";
-
-        const stopButton = document.createElement("button");
-        stopButton.type = "button";
-        stopButton.id = "stopTrackingButton";
-        stopButton.textContent = "Stop Tracking";
-        stopButton.className = "secondary-button";
-        stopButton.style.width = "auto";
-        stopButton.style.margin = "0";
-        stopButton.disabled = true;
-
-        const trackingStatus = document.createElement("p");
-        trackingStatus.id = "trackingStatus";
-        trackingStatus.textContent = "Live GPS tracking is off.";
-        trackingStatus.style.cssText =
-            "width:100%;margin:5px 0;color:#94a3b8;font-size:13px;";
-
-        controls.appendChild(startButton);
-        controls.appendChild(stopButton);
-        controls.appendChild(trackingStatus);
-
-        toolbar.appendChild(controls);
-
-        startButton.addEventListener("click", startLiveTracking);
-        stopButton.addEventListener("click", stopLiveTracking);
-    }
-
-    function updateTrackingButtons(isTracking) {
-        const startButton =
-            document.getElementById("startTrackingButton");
-
-        const stopButton =
-            document.getElementById("stopTrackingButton");
-
-        if (startButton) startButton.disabled = isTracking;
-        if (stopButton) stopButton.disabled = !isTracking;
-    }
-
-    // =========================================================
-    // TAB NAVIGATION
-    // =========================================================
-
-    function showInspectionView() {
-        if (!inspectionView || !mapView) return;
-
-        inspectionView.hidden = false;
-        inspectionView.style.display = "block";
-
-        mapView.hidden = true;
-        mapView.style.display = "none";
-
-        inspectionTab?.classList.add("active");
-        mapTab?.classList.remove("active");
-
-        inspectionTab?.setAttribute("aria-selected", "true");
-        mapTab?.setAttribute("aria-selected", "false");
-    }
-
-    function showMapView() {
-        if (!inspectionView || !mapView) return;
-
-        inspectionView.hidden = true;
-        inspectionView.style.display = "none";
-
-        mapView.hidden = false;
-        mapView.style.display = "block";
-
-        mapTab?.classList.add("active");
-        inspectionTab?.classList.remove("active");
-
-        mapTab?.setAttribute("aria-selected", "true");
-        inspectionTab?.setAttribute("aria-selected", "false");
-
-        prepareMapContainer();
-
-        setTimeout(() => {
-            prepareMapContainer();
-
-            initialiseMap();
-
-            refreshMapSize();
-
-            currentUser = app?.currentUser || currentUser;
-
-            if (currentUser) {
-                loadInspectionRecords();
-            } else {
-                setMapStatus(
-                    "Please sign in to view your inspection records."
-                );
-            }
-        }, 250);
-    }
-
-    inspectionTab?.addEventListener("click", showInspectionView);
-    mapTab?.addEventListener("click", showMapView);
-
-    // =========================================================
-    // SAFE HTML
-    // =========================================================
-
-    function escapeHTML(value) {
-        return String(value ?? "").replace(/[&<>"']/g, character => {
-            const entities = {
-                "&": "&amp;",
-                "<": "&lt;",
-                ">": "&gt;",
-                '"': "&quot;",
-                "'": "&#039;"
-            };
-
-            return entities[character];
-        });
-    }
-
-    // =========================================================
-    // INITIALISE OPENSTREETMAP
-    // =========================================================
-
-    function initialiseMap() {
-        if (mapInitialised && map) {
-            refreshMapSize();
-            return;
-        }
-
-        if (!prepareMapContainer()) return;
-
-        if (typeof L === "undefined") {
-            setMapStatus(
-                "Leaflet map library could not load.",
-                true
-            );
-            return;
-        }
-
-        try {
-            map = L.map(mapElement, {
-                zoomControl: true,
-                scrollWheelZoom: true
-            }).setView([-6.369, 34.888], 6);
-
-            L.tileLayer(
-                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                {
-                    maxZoom: 19,
-                    attribution:
-                        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
+                100% {
+                    transform: scale(2.5);
+                    opacity: 0;
                 }
-            ).addTo(map);
 
-            markerLayer = L.featureGroup().addTo(map);
+            }
 
-            mapInitialised = true;
+            .maplibregl-ctrl-attrib {
+                background: rgba(5,9,20,0.85) !important;
+                color: #ffffff !important;
+            }
 
-            refreshMapSize();
+            .maplibregl-ctrl-attrib a {
+                color: #b7f34a !important;
+            }
 
-            setTimeout(refreshMapSize, 700);
+            @media (max-width: 600px) {
 
-            console.log("Pothole Vision map successfully initialised.");
+                .pv-brand {
+                    font-size: 11px;
+                }
 
-        } catch (error) {
-            console.error("Map initialisation error:", error);
+                .pv-gps-status {
+                    font-size: 10px;
+                    padding: 9px 10px;
+                }
 
-            map = null;
-            mapInitialised = false;
+                .pv-location-card {
+                    max-width: 190px;
+                }
 
-            setMapStatus(
-                "Map initialisation failed: " + error.message,
-                true
-            );
-        }
-    }
+            }
 
-    // =========================================================
-    // DISTANCE CALCULATION
-    // =========================================================
-
-    function calculateDistance(lat1, lon1, lat2, lon2) {
-        const earthRadius = 6371000;
-
-        const toRadians = value => value * Math.PI / 180;
-
-        const dLat = toRadians(lat2 - lat1);
-        const dLon = toRadians(lon2 - lon1);
-
-        const a =
-            Math.sin(dLat / 2) ** 2 +
-            Math.cos(toRadians(lat1)) *
-            Math.cos(toRadians(lat2)) *
-            Math.sin(dLon / 2) ** 2;
-
-        return earthRadius * 2 *
-            Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    }
-
-    // =========================================================
-    // ALERT PANEL
-    // =========================================================
-
-    function createAlertPanel() {
-        const toolbar = document.querySelector(".map-toolbar");
-
-        if (!toolbar || document.getElementById("proximityAlertPanel")) {
-            alertPanel = document.getElementById("proximityAlertPanel");
-            return;
-        }
-
-        alertPanel = document.createElement("div");
-        alertPanel.id = "proximityAlertPanel";
-
-        alertPanel.style.cssText = `
-            width:100%;
-            margin-top:14px;
-            padding:16px;
-            background:#101d30;
-            border:1px solid #334155;
-            border-radius:14px;
-            box-sizing:border-box;
         `;
 
-        const title = document.createElement("h3");
-        title.textContent = "ROAD HAZARD PROXIMITY ALERTS";
-        title.style.cssText =
-            "margin:0 0 12px;color:#b7f34a;font-size:13px;letter-spacing:1px;";
+        document.head.appendChild(style);
 
-        const description = document.createElement("p");
-        description.textContent =
-            "Start live tracking to receive nearby inspection alerts.";
-        description.style.cssText =
-            "margin:0 0 8px;color:#f8fafc;font-size:13px;";
-
-        alertStatus = document.createElement("p");
-        alertStatus.id = "proximityAlertStatus";
-        alertStatus.textContent = "No nearby reported location.";
-        alertStatus.style.cssText =
-            "margin:0 0 12px;color:#94a3b8;font-size:12px;";
-
-        alertEnableButton = document.createElement("button");
-        alertEnableButton.type = "button";
-        alertEnableButton.id = "enableAlertButton";
-        alertEnableButton.textContent =
-            "Enable Sound & Notifications";
-        alertEnableButton.className = "secondary-button";
-        alertEnableButton.style.width = "auto";
-        alertEnableButton.style.margin = "0";
-
-        const disclaimer = document.createElement("p");
-        disclaimer.textContent =
-            "Alerts use approximate saved inspection locations, not exact pothole coordinates.";
-        disclaimer.style.cssText =
-            "margin:12px 0 0;color:#94a3b8;font-size:10px;line-height:1.5;";
-
-        alertPanel.appendChild(title);
-        alertPanel.appendChild(description);
-        alertPanel.appendChild(alertStatus);
-        alertPanel.appendChild(alertEnableButton);
-        alertPanel.appendChild(disclaimer);
-
-        toolbar.appendChild(alertPanel);
-
-        alertEnableButton.addEventListener(
-            "click",
-            enableAlertFeatures
-        );
     }
 
-    // =========================================================
-    // ENABLE SOUND AND NOTIFICATIONS
-    // =========================================================
+    /* ========================================================
+       CREATE MAP INTERFACE
+    ======================================================== */
 
-    async function enableAlertFeatures() {
-        try {
-            const AudioContextClass =
-                window.AudioContext || window.webkitAudioContext;
+    function createInterface() {
 
-            if (AudioContextClass) {
-                if (!audioContext) {
-                    audioContext = new AudioContextClass();
+        if (globeScreen) {
+            return;
+        }
+
+        installStyles();
+
+        globeScreen = document.createElement("div");
+
+        globeScreen.id = "pv-globe-screen";
+
+        globeScreen.innerHTML = `
+
+            <div id="pv-globe-map"></div>
+
+            <div class="pv-map-top">
+
+                <div class="pv-brand">
+                    POTHOLE <span>VISION</span>
+                </div>
+
+                <div
+                    id="pv-gps-status"
+                    class="pv-gps-status"
+                >
+                    Preparing map...
+                </div>
+
+            </div>
+
+            <div class="pv-location-card">
+
+                <strong id="pv-location-title">
+                    Finding your location
+                </strong>
+
+                <span id="pv-location-coordinates">
+                    Waiting for GPS coordinates...
+                </span>
+
+            </div>
+
+            <button
+                id="pv-record-button"
+                class="pv-record-button"
+                type="button"
+                disabled
+            >
+                ● RECORD POTHOLE
+            </button>
+
+        `;
+
+        document.body.appendChild(globeScreen);
+
+        mapElement = document.getElementById(
+            "pv-globe-map"
+        );
+
+        gpsStatus = document.getElementById(
+            "pv-gps-status"
+        );
+
+        locationTitle = document.getElementById(
+            "pv-location-title"
+        );
+
+        locationCoordinates = document.getElementById(
+            "pv-location-coordinates"
+        );
+
+        recordButton = document.getElementById(
+            "pv-record-button"
+        );
+
+        recordButton.addEventListener(
+            "click",
+            openExistingRecordingWorkflow
+        );
+
+    }
+
+    /* ========================================================
+       OPENSTREETMAP STYLE
+
+       Diagnostic map layer.
+
+       This replaces the satellite imagery temporarily
+       so that we can confirm the map renders correctly.
+    ======================================================== */
+
+    function createMapStyle() {
+
+        return {
+
+            version: 8,
+
+            sources: {
+
+                openstreetmap: {
+
+                    type: "raster",
+
+                    tiles: [
+                        "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    ],
+
+                    tileSize: 256,
+
+                    attribution:
+                        "© OpenStreetMap contributors"
+
                 }
 
-                if (audioContext.state === "suspended") {
-                    await audioContext.resume();
+            },
+
+            layers: [
+
+                {
+
+                    id: "openstreetmap-layer",
+
+                    type: "raster",
+
+                    source: "openstreetmap",
+
+                    minzoom: 0,
+                    maxzoom: 19
+
                 }
 
-                soundEnabled = true;
-            }
+            ]
 
-            if ("Notification" in window) {
-                notificationPermission =
-                    await Notification.requestPermission();
-            }
+        };
 
-            if (alertEnableButton) {
-                alertEnableButton.textContent =
-                    "Sound & Notifications Enabled";
-                alertEnableButton.disabled = true;
-            }
+    }
 
-            updateAlertStatus(
-                "Alert features enabled. Start live tracking to receive alerts."
+    /* ========================================================
+       STATUS DISPLAY
+    ======================================================== */
+
+    function setStatus(message, state = "normal") {
+
+        if (!gpsStatus) {
+            return;
+        }
+
+        gpsStatus.textContent = message;
+
+        gpsStatus.classList.remove(
+            "pv-connected",
+            "pv-error"
+        );
+
+        if (state === "connected") {
+
+            gpsStatus.classList.add(
+                "pv-connected"
             );
 
-            playAlertSound("warning");
+        }
+
+        if (state === "error") {
+
+            gpsStatus.classList.add(
+                "pv-error"
+            );
+
+        }
+
+    }
+
+    /* ========================================================
+       INITIALISE MAP
+    ======================================================== */
+
+    function initialiseMap() {
+
+        if (map) {
+            map.resize();
+            return;
+        }
+
+        createInterface();
+
+        if (typeof maplibregl === "undefined") {
+
+            setStatus(
+                "MapLibre library failed to load",
+                "error"
+            );
+
+            console.error(
+                "MapLibre GL JS is unavailable."
+            );
+
+            return;
+        }
+
+        try {
+
+            map = new maplibregl.Map({
+
+                container: mapElement,
+
+                style: createMapStyle(),
+
+                center: CONFIG.initialCenter,
+
+                zoom: CONFIG.initialZoom,
+
+                pitch: 0,
+
+                bearing: 0,
+
+                attributionControl: true,
+
+                antialias: true
+
+            });
+
+            map.addControl(
+
+                new maplibregl.NavigationControl({
+                    visualizePitch: true
+                }),
+
+                "bottom-right"
+
+            );
+
+            map.on("load", () => {
+
+                mapInitialized = true;
+
+                map.resize();
+
+                setStatus(
+                    "Map loaded — acquiring GPS"
+                );
+
+                console.log(
+                    "Pothole Vision map successfully loaded."
+                );
+
+                if (currentPosition) {
+                    moveToUser();
+                }
+
+            });
+
+            map.on("error", event => {
+
+                const error =
+                    event.error || event;
+
+                console.error(
+                    "Map rendering error:",
+                    error
+                );
+
+                if (error?.message) {
+
+                    setStatus(
+                        "Map error: " + error.message,
+                        "error"
+                    );
+
+                }
+
+            });
 
         } catch (error) {
-            console.error("Alert setup error:", error);
 
-            updateAlertStatus(
-                "Some alert features could not be enabled. Check browser permissions."
+            console.error(
+                "Map initialization failed:",
+                error
             );
+
+            setStatus(
+                "Unable to initialize map",
+                "error"
+            );
+
         }
+
     }
 
-    // =========================================================
-    // ALERT STATUS
-    // =========================================================
+    /* ========================================================
+       USER LOCATION MARKER
+    ======================================================== */
 
-    function updateAlertStatus(message, type = "normal") {
-        if (!alertStatus) return;
+    function addUserMarker() {
 
-        alertStatus.textContent = message;
-
-        if (type === "danger") {
-            alertStatus.style.color = "#ff6b6b";
-        } else if (type === "warning") {
-            alertStatus.style.color = "#fbbf24";
-        } else {
-            alertStatus.style.color = "#94a3b8";
-        }
-    }
-
-    // =========================================================
-    // ALERT SOUND
-    // =========================================================
-
-    function playAlertSound(level) {
-        if (!soundEnabled || !audioContext) return;
-
-        if (audioContext.state !== "running") return;
-
-        const frequencies = level === "danger"
-            ? [880, 660, 880]
-            : [660, 660];
-
-        frequencies.forEach((frequency, index) => {
-            const oscillator = audioContext.createOscillator();
-            const gain = audioContext.createGain();
-
-            oscillator.type = "sine";
-            oscillator.frequency.value = frequency;
-
-            const startTime =
-                audioContext.currentTime + index * 0.22;
-
-            gain.gain.setValueAtTime(0.0001, startTime);
-            gain.gain.exponentialRampToValueAtTime(
-                0.18,
-                startTime + 0.03
-            );
-            gain.gain.exponentialRampToValueAtTime(
-                0.0001,
-                startTime + 0.18
-            );
-
-            oscillator.connect(gain);
-            gain.connect(audioContext.destination);
-
-            oscillator.start(startTime);
-            oscillator.stop(startTime + 0.2);
-        });
-    }
-
-    // =========================================================
-    // BROWSER NOTIFICATION
-    // =========================================================
-
-    function sendBrowserNotification(title, message) {
         if (
-            !("Notification" in window) ||
-            notificationPermission !== "granted"
+            !map ||
+            !mapInitialized ||
+            !currentPosition
         ) {
             return;
         }
 
-        try {
-            new Notification(title, {
-                body: message,
-                tag: "pothole-vision-alert"
+        const coordinates = [
+
+            currentPosition.longitude,
+
+            currentPosition.latitude
+
+        ];
+
+        if (!userMarker) {
+
+            const element =
+                document.createElement("div");
+
+            element.className = "pv-user-marker";
+
+            element.innerHTML = `
+
+                <div class="pv-pulse"></div>
+
+                <div class="pv-dot"></div>
+
+            `;
+
+            userMarker = new maplibregl.Marker({
+
+                element: element,
+
+                anchor: "center"
+
+            })
+
+                .setLngLat(coordinates)
+
+                .addTo(map);
+
+        } else {
+
+            userMarker.setLngLat(coordinates);
+
+        }
+
+        recordButton.disabled = false;
+
+        locationTitle.textContent =
+            "Your current location";
+
+        locationCoordinates.textContent =
+
+            currentPosition.latitude.toFixed(6) +
+            ", " +
+            currentPosition.longitude.toFixed(6);
+
+        setStatus(
+            "GPS location connected",
+            "connected"
+        );
+
+    }
+
+    /* ========================================================
+       MOVE MAP TO USER
+    ======================================================== */
+
+    function moveToUser() {
+
+        if (
+            !map ||
+            !mapInitialized ||
+            !currentPosition
+        ) {
+            return;
+        }
+
+        const destination = [
+
+            currentPosition.longitude,
+
+            currentPosition.latitude
+
+        ];
+
+        if (!firstGPSFix) {
+
+            firstGPSFix = true;
+
+            map.flyTo({
+
+                center: destination,
+
+                zoom: CONFIG.destinationZoom,
+
+                pitch: CONFIG.destinationPitch,
+
+                bearing: 0,
+
+                duration: 3500,
+
+                essential: true
+
             });
-        } catch (error) {
-            console.warn("Browser notification unavailable:", error);
+
+        } else if (CONFIG.followUser) {
+
+            map.easeTo({
+
+                center: destination,
+
+                duration: 700,
+
+                essential: true
+
+            });
+
         }
+
+        addUserMarker();
+
     }
 
-    // =========================================================
-    // VIBRATION
-    // =========================================================
+    /* ========================================================
+       GPS POSITION UPDATE
+    ======================================================== */
 
-    function vibrateDevice(level) {
-        if (!navigator.vibrate) return;
+    function handlePosition(position) {
 
-        if (level === "danger") {
-            navigator.vibrate([250, 100, 250, 100, 350]);
-        } else {
-            navigator.vibrate([180, 100, 180]);
-        }
-    }
+        const coords = position.coords;
 
-    // =========================================================
-    // TRIGGER ALERT
-    // =========================================================
+        currentPosition = {
 
-    function triggerProximityAlert(record, distance, level) {
-        const roundedDistance = Math.round(distance);
+            latitude: coords.latitude,
 
-        const message = level === "danger"
-            ? `Danger alert: reported inspection location approximately ${roundedDistance} metres away.`
-            : `Warning: reported inspection location approximately ${roundedDistance} metres away.`;
+            longitude: coords.longitude,
 
-        updateAlertStatus(message, level);
+            accuracy: coords.accuracy,
 
-        playAlertSound(level);
-        vibrateDevice(level);
+            heading: coords.heading,
 
-        sendBrowserNotification(
-            level === "danger"
-                ? "POTHOLE VISION - DANGER"
-                : "POTHOLE VISION - WARNING",
-            message
+            speed: coords.speed
+
+        };
+
+        console.log(
+            "GPS position:",
+            currentPosition
         );
 
-        console.log("Proximity alert:", {
-            recordId: record.id,
-            distance: roundedDistance,
-            level
-        });
-    }
+        /* Update marker and map */
 
-    // =========================================================
-    // CHECK PROXIMITY TO SAVED INSPECTIONS
-    // =========================================================
+        if (mapInitialized) {
 
-    function checkProximityAlerts(latitude, longitude, accuracy) {
-        if (!inspectionRecords.length) {
-            updateAlertStatus(
-                "No reported inspection locations available."
-            );
-            return;
-        }
+            if (!firstGPSFix) {
 
-        if (accuracy > MAX_ALERT_GPS_ACCURACY) {
-            updateAlertStatus(
-                `GPS accuracy is too low (±${Math.round(accuracy)}m). Waiting for a better GPS reading.`
-            );
-            return;
-        }
+                moveToUser();
 
-        const hazards = inspectionRecords.filter(record =>
-            Number(record.total_potholes) > 0 &&
-            Number.isFinite(Number(record.latitude)) &&
-            Number.isFinite(Number(record.longitude))
-        );
-
-        if (!hazards.length) {
-            updateAlertStatus(
-                "No reported pothole inspection locations available."
-            );
-            return;
-        }
-
-        let nearestRecord = null;
-        let nearestDistance = Infinity;
-
-        hazards.forEach(record => {
-            const distance = calculateDistance(
-                latitude,
-                longitude,
-                Number(record.latitude),
-                Number(record.longitude)
-            );
-
-            if (distance < nearestDistance) {
-                nearestDistance = distance;
-                nearestRecord = record;
-            }
-
-            const recordKey = String(record.id);
-            const previousAlert = alertStates.get(recordKey);
-
-            // Reset after moving sufficiently far away.
-            if (
-                previousAlert &&
-                distance > ALERT_RESET_DISTANCE
-            ) {
-                alertStates.delete(recordKey);
-            }
-        });
-
-        if (!nearestRecord) return;
-
-        if (nearestDistance > WARNING_DISTANCE) {
-            updateAlertStatus(
-                `Nearest reported inspection location: ${Math.round(nearestDistance)}m away.`
-            );
-            return;
-        }
-
-        const recordKey = String(nearestRecord.id);
-        const previousAlert = alertStates.get(recordKey);
-
-        if (nearestDistance <= DANGER_DISTANCE) {
-            if (previousAlert !== "danger") {
-                triggerProximityAlert(
-                    nearestRecord,
-                    nearestDistance,
-                    "danger"
-                );
-
-                alertStates.set(recordKey, "danger");
             } else {
-                updateAlertStatus(
-                    `Danger zone: reported inspection location approximately ${Math.round(nearestDistance)}m away.`,
-                    "danger"
-                );
+
+                addUserMarker();
+
+                if (CONFIG.followUser) {
+
+                    map.easeTo({
+
+                        center: [
+
+                            currentPosition.longitude,
+
+                            currentPosition.latitude
+
+                        ],
+
+                        duration: 700,
+
+                        essential: true
+
+                    });
+
+                }
+
             }
 
-        } else {
-            if (!previousAlert) {
-                triggerProximityAlert(
-                    nearestRecord,
-                    nearestDistance,
-                    "warning"
-                );
-
-                alertStates.set(recordKey, "warning");
-            } else if (previousAlert !== "danger") {
-                updateAlertStatus(
-                    `Warning zone: reported inspection location approximately ${Math.round(nearestDistance)}m away.`,
-                    "warning"
-                );
-            }
         }
+
+        /* Share GPS coordinates with main application */
+
+        window.PotholeVision =
+            window.PotholeVision || {};
+
+        window.PotholeVision.currentLocation = {
+
+            latitude: currentPosition.latitude,
+
+            longitude: currentPosition.longitude,
+
+            accuracy: currentPosition.accuracy
+
+        };
+
+        window.dispatchEvent(
+
+            new CustomEvent(
+                "potholevision:location-updated",
+
+                {
+
+                    detail:
+                        window.PotholeVision.currentLocation
+
+                }
+
+            )
+
+        );
+
+        previousPosition = currentPosition;
+
     }
 
-    // =========================================================
-    // VEHICLE DIRECTION
-    // =========================================================
+    /* ========================================================
+       GPS ERROR HANDLING
+    ======================================================== */
 
-    function calculateBearing(start, end) {
-        const toRadians = degrees => degrees * Math.PI / 180;
-        const toDegrees = radians => radians * 180 / Math.PI;
+    function handleGPSError(error) {
 
-        const lat1 = toRadians(start.latitude);
-        const lat2 = toRadians(end.latitude);
+        console.error(
+            "GPS error:",
+            error
+        );
 
-        const deltaLongitude =
-            toRadians(end.longitude - start.longitude);
+        let message =
+            "Unable to obtain GPS location";
 
-        const y =
-            Math.sin(deltaLongitude) * Math.cos(lat2);
+        if (error.code === 1) {
 
-        const x =
-            Math.cos(lat1) * Math.sin(lat2) -
-            Math.sin(lat1) * Math.cos(lat2) *
-            Math.cos(deltaLongitude);
+            message =
+                "Location permission denied. Check browser settings.";
 
-        return (
-            toDegrees(Math.atan2(y, x)) + 360
-        ) % 360;
+        } else if (error.code === 2) {
+
+            message =
+                "GPS unavailable. Check phone location services.";
+
+        } else if (error.code === 3) {
+
+            message =
+                "GPS timed out. Waiting for another reading.";
+
+        }
+
+        setStatus(
+            message,
+            "error"
+        );
+
+        if (locationTitle) {
+
+            locationTitle.textContent =
+                "GPS connection problem";
+
+        }
+
+        if (locationCoordinates) {
+
+            locationCoordinates.textContent =
+                message;
+
+        }
+
     }
 
-    // =========================================================
-    // VEHICLE ICON
-    // =========================================================
+    /* ========================================================
+       START GPS TRACKING
+    ======================================================== */
 
-    function createVehicleIcon(heading) {
-        const rotation = Number.isFinite(heading) ? heading : 0;
+    function startGPS() {
 
-        return L.divIcon({
-            className: "vehicle-marker-container",
-            html: `
-                <div style="
-                    width:42px;
-                    height:42px;
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    filter:drop-shadow(0 2px 5px #000);
-                ">
-                    <svg
-                        width="38"
-                        height="38"
-                        viewBox="0 0 40 40"
-                        style="transform:rotate(${rotation}deg);"
-                    >
-                        <circle
-                            cx="20"
-                            cy="20"
-                            r="17"
-                            fill="#2563eb"
-                            stroke="white"
-                            stroke-width="2"
-                        />
-                        <path
-                            d="M20 5 L29 29 L20 24 L11 29 Z"
-                            fill="white"
-                        />
-                    </svg>
-                </div>
-            `,
-            iconSize: [42, 42],
-            iconAnchor: [21, 21]
-        });
-    }
+        if (gpsStarted) {
+            return;
+        }
 
-    // =========================================================
-    // START GPS TRACKING
-    // =========================================================
-
-    function startLiveTracking() {
         if (!navigator.geolocation) {
-            setTrackingStatus(
-                "Your browser does not support GPS location.",
-                true
+
+            setStatus(
+                "This browser does not support GPS",
+                "error"
             );
+
             return;
         }
 
         if (!window.isSecureContext) {
-            setTrackingStatus(
-                "GPS requires a secure HTTPS website.",
-                true
+
+            setStatus(
+                "GPS requires a secure HTTPS connection",
+                "error"
             );
+
             return;
         }
 
-        if (!mapInitialised) {
-            initialiseMap();
-        }
+        gpsStarted = true;
 
-        if (!map) {
-            setTrackingStatus(
-                "The map is not ready. Please try again.",
-                true
-            );
-            return;
-        }
-
-        if (gpsWatchId !== null) return;
-
-        refreshMapSize();
-
-        setTrackingStatus(
-            "Requesting your phone's GPS location..."
+        setStatus(
+            "Requesting phone GPS location"
         );
 
-        updateTrackingButtons(true);
+        locationTitle.textContent =
+            "Finding your location";
 
-        gpsWatchId = navigator.geolocation.watchPosition(
-            handleGPSPosition,
-            handleGPSError,
-            {
-                enableHighAccuracy: true,
-                maximumAge: 1000,
-                timeout: 20000
-            }
-        );
-    }
+        locationCoordinates.textContent =
+            "Waiting for GPS coordinates...";
 
-    // =========================================================
-    // HANDLE GPS POSITION
-    // =========================================================
+        gpsWatchId =
+            navigator.geolocation.watchPosition(
 
-    function handleGPSPosition(position) {
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
-        const accuracy = position.coords.accuracy;
+                handlePosition,
 
-        const newPosition = {
-            latitude,
-            longitude
-        };
+                handleGPSError,
 
-        let heading = position.coords.heading;
-
-        if (
-            heading === null ||
-            !Number.isFinite(heading)
-        ) {
-            if (previousPosition) {
-                const distanceMoved = map.distance(
-                    [
-                        previousPosition.latitude,
-                        previousPosition.longitude
-                    ],
-                    [latitude, longitude]
-                );
-
-                if (distanceMoved >= 3) {
-                    heading = calculateBearing(
-                        previousPosition,
-                        newPosition
-                    );
-                } else {
-                    heading = currentHeading;
-                }
-            }
-        }
-
-        if (Number.isFinite(heading)) {
-            currentHeading = heading;
-        }
-
-        previousPosition = newPosition;
-
-        const coordinates = [latitude, longitude];
-
-        if (!vehicleMarker) {
-            vehicleMarker = L.marker(
-                coordinates,
                 {
-                    icon: createVehicleIcon(currentHeading),
-                    zIndexOffset: 1000
-                }
-            ).addTo(map);
 
-            vehicleMarker.bindPopup(
-                "<strong>Your current vehicle location</strong>"
+                    enableHighAccuracy:
+                        CONFIG.enableHighAccuracy,
+
+                    timeout:
+                        CONFIG.gpsTimeout,
+
+                    maximumAge:
+                        CONFIG.gpsMaximumAge
+
+                }
+
             );
 
-            map.setView(coordinates, 17);
-
-        } else {
-            vehicleMarker.setLatLng(coordinates);
-
-            vehicleMarker.setIcon(
-                createVehicleIcon(currentHeading)
-            );
-
-            map.panTo(coordinates, {
-                animate: true,
-                duration: 0.5
-            });
-        }
-
-        if (!accuracyCircle) {
-            accuracyCircle = L.circle(
-                coordinates,
-                {
-                    radius: accuracy,
-                    color: "#60a5fa",
-                    fillColor: "#3b82f6",
-                    fillOpacity: 0.12,
-                    weight: 1
-                }
-            ).addTo(map);
-
-        } else {
-            accuracyCircle.setLatLng(coordinates);
-            accuracyCircle.setRadius(accuracy);
-        }
-
-        const headingText = Number.isFinite(currentHeading)
-            ? `${Math.round(currentHeading)}°`
-            : "Not available yet";
-
-        setTrackingStatus(
-            `Live GPS active | Accuracy: ±${Math.round(accuracy)} m | Direction: ${headingText}`
-        );
-
-        // Check nearby inspection locations.
-        checkProximityAlerts(
-            latitude,
-            longitude,
-            accuracy
-        );
     }
 
-    // =========================================================
-    // GPS ERRORS
-    // =========================================================
+    /* ========================================================
+       STOP GPS TRACKING
+    ======================================================== */
 
-    function handleGPSError(error) {
-        let message = "Unable to obtain your GPS location.";
+    function stopGPS() {
 
-        switch (error.code) {
-            case error.PERMISSION_DENIED:
-                message =
-                    "Location permission denied. Allow location access in browser settings.";
-                break;
-
-            case error.POSITION_UNAVAILABLE:
-                message =
-                    "GPS position is currently unavailable. Check your phone's location settings.";
-                break;
-
-            case error.TIMEOUT:
-                message =
-                    "GPS request timed out. Please try again.";
-                break;
-        }
-
-        setTrackingStatus(message, true);
-        updateTrackingButtons(false);
-
-        if (
-            error.code === error.PERMISSION_DENIED ||
-            error.code === error.POSITION_UNAVAILABLE
-        ) {
-            stopLiveTracking();
-        }
-    }
-
-    // =========================================================
-    // STOP GPS TRACKING
-    // =========================================================
-
-    function stopLiveTracking() {
         if (gpsWatchId !== null) {
-            navigator.geolocation.clearWatch(gpsWatchId);
-            gpsWatchId = null;
+
+            navigator.geolocation.clearWatch(
+                gpsWatchId
+            );
+
         }
 
-        if (vehicleMarker && map) {
-            map.removeLayer(vehicleMarker);
-            vehicleMarker = null;
-        }
+        gpsWatchId = null;
 
-        if (accuracyCircle && map) {
-            map.removeLayer(accuracyCircle);
-            accuracyCircle = null;
-        }
+        gpsStarted = false;
+
+        currentPosition = null;
 
         previousPosition = null;
-        currentHeading = null;
 
-        updateTrackingButtons(false);
+        firstGPSFix = false;
 
-        setTrackingStatus("Live GPS tracking is off.");
-
-        updateAlertStatus(
-            "Live tracking stopped. No proximity alerts are active."
-        );
     }
 
-    // =========================================================
-    // DATE FORMATTING
-    // =========================================================
+    /* ========================================================
+       RECORD POTHOLE
 
-    function formatDate(dateValue) {
-        if (!dateValue) return "Date unavailable";
+       Reuses existing camera and AI workflow.
+    ======================================================== */
 
-        const date = new Date(dateValue);
+    function openExistingRecordingWorkflow() {
 
-        if (Number.isNaN(date.getTime())) {
-            return "Date unavailable";
+        const cameraButton =
+            document.getElementById("cameraButton");
+
+        if (!cameraButton) {
+
+            alert(
+                "The existing camera workflow could not be found."
+            );
+
+            return;
         }
 
-        return date.toLocaleString();
-    }
+        if (!currentPosition) {
 
-    // =========================================================
-    // RESET MAP SUMMARY
-    // =========================================================
+            alert(
+                "Please wait until your phone GPS location is available."
+            );
 
-    function resetMapSummary() {
-        if (inspectionCountElement) {
-            inspectionCountElement.textContent = "0";
+            return;
         }
 
-        if (potholeCountElement) {
-            potholeCountElement.textContent = "0";
-        }
+        /* Hide map interface temporarily */
 
-        if (locationCountElement) {
-            locationCountElement.textContent = "0";
-        }
-
-        if (recordsListElement) {
-            recordsListElement.innerHTML =
-                '<p class="empty-message">No inspection records available.</p>';
-        }
-
-        if (markerLayer) {
-            markerLayer.clearLayers();
-        }
-
-        inspectionRecords = [];
-        alertStates.clear();
-    }
-
-    // =========================================================
-    // CREATE INSPECTION MARKER
-    // =========================================================
-
-    function createInspectionMarker(record) {
-        const latitude = Number(record.latitude);
-        const longitude = Number(record.longitude);
-
-        if (
-            !Number.isFinite(latitude) ||
-            !Number.isFinite(longitude) ||
-            latitude < -90 ||
-            latitude > 90 ||
-            longitude < -180 ||
-            longitude > 180
-        ) {
-            return null;
-        }
-
-        const potholeCount =
-            Number(record.total_potholes) || 0;
-
-        const marker = L.circleMarker(
-            [latitude, longitude],
-            {
-                radius: 9,
-                color: "#a3e635",
-                weight: 2,
-                fillColor: "#84cc16",
-                fillOpacity: 0.85
-            }
+        globeScreen.classList.remove(
+            "pv-active"
         );
 
-        const averageConfidence =
-            record.average_confidence != null
-                ? (
-                    Number(record.average_confidence) * 100
-                ).toFixed(1) + "%"
-                : "N/A";
+        /* Reveal existing application */
 
-        const popupContent = `
-            <div class="map-popup">
-                <strong>Inspection Record</strong>
-                <p><b>Potholes detected:</b> ${potholeCount}</p>
-                <p><b>Date:</b> ${escapeHTML(formatDate(record.inspected_at))}</p>
-                <p><b>Confidence threshold:</b> ${escapeHTML(record.confidence_threshold ?? "N/A")}%</p>
-                <p><b>Average confidence:</b> ${escapeHTML(averageConfidence)}</p>
-                <p><b>Latitude:</b> ${latitude.toFixed(6)}</p>
-                <p><b>Longitude:</b> ${longitude.toFixed(6)}</p>
-            </div>
-        `;
+        const appWorkspace =
+            document.getElementById("appWorkspace");
 
-        marker.bindPopup(popupContent);
-        marker.recordId = record.id;
+        const inspectionView =
+            document.getElementById("inspectionView");
 
-        return marker;
+        const mapView =
+            document.getElementById("mapView");
+
+        if (appWorkspace) {
+
+            appWorkspace.hidden = false;
+
+        }
+
+        if (inspectionView) {
+
+            inspectionView.hidden = false;
+
+        }
+
+        if (mapView) {
+
+            mapView.hidden = true;
+
+        }
+
+        /* Existing camera workflow */
+
+        cameraButton.click();
+
     }
 
-    // =========================================================
-    // DISPLAY INSPECTION RECORDS
-    // =========================================================
+    /* ========================================================
+       RETURN TO MAP AFTER INSPECTION
+    ======================================================== */
 
-    function renderRecords(records) {
-        if (!recordsListElement) return;
+    function returnToMap() {
 
-        if (!records.length) {
-            recordsListElement.innerHTML = `
-                <p class="empty-message">
-                    No inspection records with GPS coordinates were found.
-                </p>
-            `;
+        if (!authenticated) {
             return;
         }
 
-        recordsListElement.innerHTML = records.map(record => {
-            const latitude = Number(record.latitude);
-            const longitude = Number(record.longitude);
+        const appWorkspace =
+            document.getElementById("appWorkspace");
 
-            return `
-                <div class="map-record-card"
-                     data-record-id="${escapeHTML(record.id)}">
+        if (appWorkspace) {
 
-                    <div class="record-card-header">
-                        <strong>Inspection</strong>
-                        <span class="record-count">
-                            ${Number(record.total_potholes) || 0} potholes
-                        </span>
-                    </div>
+            appWorkspace.hidden = true;
 
-                    <p>${escapeHTML(formatDate(record.inspected_at))}</p>
-
-                    <p class="record-coordinates">
-                        ${latitude.toFixed(5)}, ${longitude.toFixed(5)}
-                    </p>
-
-                    <button
-                        type="button"
-                        class="view-record-button"
-                        data-record-id="${escapeHTML(record.id)}">
-                        View on Map
-                    </button>
-                </div>
-            `;
-        }).join("");
-
-        recordsListElement
-            .querySelectorAll(".view-record-button")
-            .forEach(button => {
-                button.addEventListener("click", () => {
-                    const record = records.find(
-                        item =>
-                            String(item.id) === button.dataset.recordId
-                    );
-
-                    if (record) {
-                        focusRecord(record);
-                    }
-                });
-            });
-    }
-
-    // =========================================================
-    // FOCUS ON AN INSPECTION
-    // =========================================================
-
-    function focusRecord(record) {
-        if (!mapInitialised) {
-            initialiseMap();
         }
 
-        if (!map || !markerLayer) return;
+        if (globeScreen) {
 
-        const latitude = Number(record.latitude);
-        const longitude = Number(record.longitude);
-
-        if (
-            !Number.isFinite(latitude) ||
-            !Number.isFinite(longitude)
-        ) {
-            return;
-        }
-
-        refreshMapSize();
-
-        map.setView([latitude, longitude], 16);
-
-        markerLayer.eachLayer(marker => {
-            if (String(marker.recordId) === String(record.id)) {
-                marker.openPopup();
-            }
-        });
-    }
-
-    // =========================================================
-    // LOAD INSPECTION RECORDS
-    // =========================================================
-
-    async function loadInspectionRecords() {
-        if (loadingRecords) {
-            pendingRecordLoad = true;
-            return;
-        }
-
-        currentUser = app?.currentUser || currentUser;
-
-        if (!currentUser) {
-            resetMapSummary();
-            setMapStatus(
-                "Please sign in to view your inspection records."
-            );
-            return;
-        }
-
-        if (!supabaseClient) {
-            setMapStatus(
-                "Shared database connection is unavailable.",
-                true
-            );
-            return;
-        }
-
-        loadingRecords = true;
-        pendingRecordLoad = false;
-
-        setMapStatus("Loading inspection records...");
-
-        try {
-            initialiseMap();
-
-            if (!mapInitialised || !map) {
-                throw new Error("The map could not be initialised.");
-            }
-
-            const { data, error } = await supabaseClient
-                .from("inspections")
-                .select(`
-                    id,
-                    inspected_at,
-                    latitude,
-                    longitude,
-                    total_potholes,
-                    confidence_threshold,
-                    average_confidence
-                `)
-                .not("latitude", "is", null)
-                .not("longitude", "is", null)
-                .order("inspected_at", { ascending: false })
-                .limit(1000);
-
-            if (error) throw error;
-
-            const records = data || [];
-
-            inspectionRecords = records.filter(record =>
-                Number.isFinite(Number(record.latitude)) &&
-                Number.isFinite(Number(record.longitude))
+            globeScreen.classList.add(
+                "pv-active"
             );
 
-            markerLayer.clearLayers();
-
-            let totalPotholes = 0;
-            let validLocations = 0;
-
-            inspectionRecords.forEach(record => {
-                const marker = createInspectionMarker(record);
-
-                if (!marker) return;
-
-                markerLayer.addLayer(marker);
-
-                totalPotholes +=
-                    Number(record.total_potholes) || 0;
-
-                validLocations++;
-            });
-
-            if (inspectionCountElement) {
-                inspectionCountElement.textContent =
-                    records.length;
-            }
-
-            if (potholeCountElement) {
-                potholeCountElement.textContent =
-                    totalPotholes;
-            }
-
-            if (locationCountElement) {
-                locationCountElement.textContent =
-                    validLocations;
-            }
-
-            renderRecords(inspectionRecords);
-
-            if (validLocations > 0 && !vehicleMarker) {
-                map.fitBounds(markerLayer.getBounds(), {
-                    padding: [40, 40],
-                    maxZoom: 15
-                });
-
-                setMapStatus(
-                    `${validLocations} inspection locations loaded successfully.`
-                );
-
-            } else if (validLocations === 0 && !vehicleMarker) {
-                map.setView([-6.369, 34.888], 6);
-
-                setMapStatus(
-                    "No inspection locations with GPS coordinates found."
-                );
-
-            } else {
-                setMapStatus(
-                    `${validLocations} inspection locations loaded. Live GPS tracking is active.`
-                );
-            }
-
-            refreshMapSize();
-
-            // Update alert information when records are refreshed.
-            if (!inspectionRecords.some(
-                record => Number(record.total_potholes) > 0
-            )) {
-                updateAlertStatus(
-                    "No reported inspection locations with potholes."
-                );
-            } else if (gpsWatchId === null) {
-                updateAlertStatus(
-                    "Saved inspection locations loaded. Start live tracking for proximity alerts."
-                );
-            }
-
-        } catch (error) {
-            console.error("Inspection map error:", error);
-
-            setMapStatus(
-                "Could not load inspection records: " + error.message,
-                true
-            );
-
-        } finally {
-            loadingRecords = false;
-
-            if (pendingRecordLoad && currentUser) {
-                pendingRecordLoad = false;
-                setTimeout(loadInspectionRecords, 100);
-            }
         }
+
+        if (map) {
+
+            map.resize();
+
+        }
+
+        if (currentPosition) {
+
+            moveToUser();
+
+        }
+
     }
 
-    // =========================================================
-    // REFRESH MAP BUTTON
-    // =========================================================
+    window.addEventListener(
 
-    if (refreshMapButton) {
-        refreshMapButton.addEventListener("click", () => {
-            initialiseMap();
-            refreshMapSize();
-            loadInspectionRecords();
-        });
-    }
+        "potholevision:inspection-saved",
 
-    // =========================================================
-    // INITIALISE APPLICATION
-    // =========================================================
+        returnToMap
 
-    createTrackingControls();
-    createAlertPanel();
-
-    showInspectionView();
-
-    console.log(
-        "Pothole Vision map, GPS and proximity alert system loaded."
     );
+
+    /* ========================================================
+       AUTHENTICATION
+    ======================================================== */
+
+    function onAuthenticated(event) {
+
+        const user = event.detail?.user;
+
+        if (!user) {
+
+            onSignedOut();
+
+            return;
+
+        }
+
+        authenticated = true;
+
+        createInterface();
+
+        /* Hide login and old dashboard */
+
+        const loginScreen =
+            document.getElementById("loginScreen");
+
+        const recoveryScreen =
+            document.getElementById("recoveryScreen");
+
+        const newPasswordScreen =
+            document.getElementById("newPasswordScreen");
+
+        const appWorkspace =
+            document.getElementById("appWorkspace");
+
+        const introSection =
+            document.querySelector(".intro-section");
+
+        const appHeader =
+            document.querySelector(".app-header");
+
+        const appFooter =
+            document.querySelector(".app-footer");
+
+        if (loginScreen) {
+            loginScreen.hidden = true;
+        }
+
+        if (recoveryScreen) {
+            recoveryScreen.hidden = true;
+        }
+
+        if (newPasswordScreen) {
+            newPasswordScreen.hidden = true;
+        }
+
+        if (appWorkspace) {
+            appWorkspace.hidden = true;
+        }
+
+        if (introSection) {
+            introSection.hidden = true;
+        }
+
+        if (appHeader) {
+            appHeader.hidden = true;
+        }
+
+        if (appFooter) {
+            appFooter.hidden = true;
+        }
+
+        globeScreen.classList.add(
+            "pv-active"
+        );
+
+        initialiseMap();
+
+        startGPS();
+
+        setTimeout(() => {
+
+            if (map) {
+                map.resize();
+            }
+
+        }, 500);
+
+    }
+
+    /* ========================================================
+       SIGN OUT
+    ======================================================== */
+
+    function onSignedOut() {
+
+        authenticated = false;
+
+        stopGPS();
+
+        if (globeScreen) {
+
+            globeScreen.classList.remove(
+                "pv-active"
+            );
+
+        }
+
+        const loginScreen =
+            document.getElementById("loginScreen");
+
+        const introSection =
+            document.querySelector(".intro-section");
+
+        const appHeader =
+            document.querySelector(".app-header");
+
+        const appFooter =
+            document.querySelector(".app-footer");
+
+        if (loginScreen) {
+            loginScreen.hidden = false;
+        }
+
+        if (introSection) {
+            introSection.hidden = false;
+        }
+
+        if (appHeader) {
+            appHeader.hidden = false;
+        }
+
+        if (appFooter) {
+            appFooter.hidden = false;
+        }
+
+    }
+
+    window.addEventListener(
+        "potholevision:auth",
+        onAuthenticated
+    );
+
+    window.addEventListener(
+        "potholevision:signout",
+        onSignedOut
+    );
+
+    /* ========================================================
+       EXISTING SESSION CHECK
+    ======================================================== */
+
+    function checkExistingSession() {
+
+        const user =
+            window.PotholeVision?.currentUser;
+
+        if (user) {
+
+            onAuthenticated({
+
+                detail: {
+                    user: user
+                }
+
+            });
+
+        }
+
+    }
+
+    if (document.readyState === "loading") {
+
+        document.addEventListener(
+
+            "DOMContentLoaded",
+
+            checkExistingSession,
+
+            { once: true }
+
+        );
+
+    } else {
+
+        checkExistingSession();
+
+    }
+
+    /* ========================================================
+       PUBLIC MAP API
+    ======================================================== */
+
+    window.PotholeVisionMap = {
+
+        startLocationTracking: startGPS,
+
+        stopLocationTracking: stopGPS,
+
+        getCurrentPosition: () => currentPosition,
+
+        getMap: () => map,
+
+        returnToMap: returnToMap,
+
+        focusUser: () => {
+
+            if (currentPosition && map) {
+
+                map.flyTo({
+
+                    center: [
+
+                        currentPosition.longitude,
+
+                        currentPosition.latitude
+
+                    ],
+
+                    zoom: CONFIG.destinationZoom,
+
+                    pitch: CONFIG.destinationPitch,
+
+                    duration: 2000,
+
+                    essential: true
+
+                });
+
+            }
+
+        }
+
+    };
 
 })();

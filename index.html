@@ -8,26 +8,21 @@
 
   <title>Pothole Vision | AI Road Inspection</title>
 
-  <!-- APPLICATION STYLES -->
+  <!-- Main application stylesheet -->
   <link rel="stylesheet" href="./styles.css">
 
-  <!-- LEAFLET MAP STYLES -->
+  <!-- MapLibre CSS: required by the new map.js -->
   <link
     rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
   >
-
-  <!-- UPDATED MAP STYLESHEET -->
-  <link rel="stylesheet" href="./map.css?v=3">
 
   <style>
     [hidden] {
       display: none !important;
     }
 
-    /* =====================================
-       INTRODUCTION
-    ===================================== */
+    /* INTRODUCTION */
 
     .intro-section {
       display: block;
@@ -64,11 +59,10 @@
       margin: 0;
     }
 
-    /* =====================================
-       LOGIN SCREEN
-    ===================================== */
+    /* LOGIN */
 
-    .login-screen {
+    .login-screen,
+    .recovery-screen {
       max-width: 520px;
       margin: 25px auto;
       padding: 24px;
@@ -77,11 +71,13 @@
       border-radius: 16px;
     }
 
-    .login-screen h2 {
+    .login-screen h2,
+    .recovery-screen h2 {
       color: #f8fafc;
     }
 
-    .login-screen p {
+    .login-screen p,
+    .recovery-screen p {
       color: #cbd5e1;
     }
 
@@ -116,13 +112,15 @@
       font-size: 12px;
     }
 
-    .auth-buttons {
+    .auth-buttons,
+    .recovery-actions {
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
     }
 
-    .auth-buttons button {
+    .auth-buttons button,
+    .recovery-actions button {
       flex: 1;
     }
 
@@ -132,9 +130,27 @@
       margin-top: 12px;
     }
 
-    /* =====================================
-       PROFILE ICON AND DROPDOWN
-    ===================================== */
+    .forgot-password-container {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: -5px;
+    }
+
+    .forgot-password-button {
+      border: 0;
+      padding: 4px 0;
+      background: transparent;
+      color: #b7f34a;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .forgot-password-button:hover {
+      text-decoration: underline;
+    }
+
+    /* ACCOUNT MENU */
 
     .account-menu-container {
       position: relative;
@@ -144,33 +160,18 @@
     }
 
     .account-icon-button {
-      width: 42px !important;
-      height: 42px !important;
+      width: 42px;
+      height: 42px;
       min-width: 42px;
-      padding: 0 !important;
-      margin: 0 !important;
-
+      padding: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-
       color: #b7f34a;
       background: #151f30;
       border: 1px solid #334155;
       border-radius: 50%;
-
       cursor: pointer;
-      transition: 0.2s ease;
-    }
-
-    .account-icon-button:hover {
-      background: #26351e;
-      border-color: #b7f34a;
-    }
-
-    .account-icon-button:focus-visible {
-      outline: 2px solid #b7f34a;
-      outline-offset: 3px;
     }
 
     .account-dropdown {
@@ -178,25 +179,17 @@
       top: 52px;
       right: 0;
       z-index: 3000;
-
       width: 230px;
       padding: 15px;
-
       background: #151f30;
       border: 1px solid #334155;
       border-radius: 12px;
-
       box-shadow: 0 12px 30px #0008;
       box-sizing: border-box;
     }
 
-    .account-dropdown[hidden],
-    .account-dropdown:not(.account-menu-open) {
+    .account-dropdown[hidden] {
       display: none !important;
-    }
-
-    .account-dropdown.account-menu-open {
-      display: block !important;
     }
 
     .account-user-info {
@@ -204,11 +197,9 @@
       align-items: flex-start;
       gap: 9px;
       margin-bottom: 14px;
-
       color: #f8fafc;
       font-size: 12px;
       overflow-wrap: anywhere;
-      word-break: break-word;
     }
 
     .account-user-info .user-indicator {
@@ -216,7 +207,6 @@
       height: 9px;
       margin-top: 3px;
       flex-shrink: 0;
-
       background: #86efac;
       border-radius: 50%;
     }
@@ -226,37 +216,29 @@
       margin: 0;
     }
 
-    /* =====================================
-       IMAGE UPLOAD AND PREVIEW
-    ===================================== */
+    /* IMAGE UPLOAD */
 
     .upload-container {
       position: relative;
       width: 100%;
       min-height: 220px;
-
       display: flex;
       align-items: center;
       justify-content: center;
-
       overflow: hidden;
-
       border: 2px dashed #52627a;
       border-radius: 14px;
       background: #101827;
-
       padding: 12px;
       box-sizing: border-box;
     }
 
-    .upload-container .upload-content {
+    .upload-content {
       width: 100%;
-
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-
       text-align: center;
     }
 
@@ -264,7 +246,6 @@
       width: 100%;
       max-width: 100%;
       margin: 0;
-
       position: relative;
       overflow: hidden;
       border-radius: 10px;
@@ -275,10 +256,8 @@
       width: 100%;
       height: 380px;
       max-height: 60vh;
-
       object-fit: contain;
       margin: auto;
-
       border: none;
       border-radius: 8px;
     }
@@ -293,11 +272,10 @@
       display: none;
     }
 
-    /* =====================================
-       CAMERA
-    ===================================== */
+    /* CAMERA */
 
     #cameraVideo {
+      display: block;
       width: 100%;
       max-height: 420px;
       background: #000;
@@ -314,9 +292,7 @@
       flex: 1;
     }
 
-    /* =====================================
-       MAP
-    ===================================== */
+    /* INSPECTION MAP */
 
     #inspectionMap {
       display: block;
@@ -327,9 +303,36 @@
       overflow: hidden;
     }
 
-    /* =====================================
-       MOBILE
-    ===================================== */
+    /* GPS */
+
+    .gps-details {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .gps-item {
+      padding: 12px;
+      background: rgba(255,255,255,.04);
+      border-radius: 9px;
+      min-width: 0;
+    }
+
+    .gps-item span {
+      display: block;
+      color: #94a3b8;
+      font-size: 11px;
+      margin-bottom: 5px;
+    }
+
+    .gps-item strong {
+      display: block;
+      color: #f8fafc;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    /* MOBILE */
 
     @media (max-width: 600px) {
       .intro-section {
@@ -340,12 +343,18 @@
         height: 320px;
       }
 
-      .login-screen {
+      .login-screen,
+      .recovery-screen {
         padding: 18px;
       }
 
-      .auth-buttons {
+      .auth-buttons,
+      .recovery-actions {
         flex-direction: column;
+      }
+
+      .gps-details {
+        grid-template-columns: 1fr;
       }
 
       .account-dropdown {
@@ -370,7 +379,7 @@
 
       <div>
         <h1>POTHOLE VISION</h1>
-        <p>AI ROAD INSPECTION & MAPPING</p>
+        <p>AI ROAD INSPECTION &amp; MAPPING</p>
       </div>
     </div>
 
@@ -379,7 +388,7 @@
       AI DETECTION SYSTEM
     </div>
 
-    <!-- PROFILE MENU -->
+    <!-- ACCOUNT MENU -->
 
     <div class="account-menu-container">
 
@@ -408,14 +417,11 @@
         </svg>
       </button>
 
-      <!-- ACCOUNT DROPDOWN -->
-
       <div
         id="authUserPanel"
         class="account-dropdown"
         hidden
       >
-
         <div class="account-user-info">
           <span class="user-indicator"></span>
           <span id="signedInEmail"></span>
@@ -428,7 +434,6 @@
         >
           Sign Out
         </button>
-
       </div>
 
     </div>
@@ -436,8 +441,7 @@
   </header>
 
   <!-- ===================================
-       ROAD SAFETY INTRODUCTION
-       ALWAYS VISIBLE
+       INTRODUCTION
   ==================================== -->
 
   <section class="intro-section">
@@ -457,7 +461,7 @@
   </section>
 
   <!-- ===================================
-       LOGIN SCREEN
+       LOGIN
   ==================================== -->
 
   <main id="loginScreen" class="login-screen">
@@ -503,7 +507,6 @@
         >
 
         <label class="password-toggle">
-
           <input
             type="checkbox"
             id="showPassword"
@@ -514,10 +517,18 @@
                 this.checked ? 'Hide password' : 'Show password';
             "
           >
-
           <span id="passwordToggleText">Show password</span>
-
         </label>
+
+        <div class="forgot-password-container">
+          <button
+            type="button"
+            id="forgotPasswordButton"
+            class="forgot-password-button"
+          >
+            Forgot Password?
+          </button>
+        </div>
 
       </div>
 
@@ -543,14 +554,155 @@
 
     </form>
 
-    <p id="authMessage" class="auth-message" role="status">
+    <p
+      id="authMessage"
+      class="auth-message"
+      role="status"
+      aria-live="polite"
+    >
       Checking your saved sign-in...
     </p>
 
   </main>
 
   <!-- ===================================
-       MAIN APPLICATION WORKSPACE
+       PASSWORD RECOVERY
+  ==================================== -->
+
+  <main
+    id="recoveryScreen"
+    class="recovery-screen"
+    hidden
+  >
+
+    <h2>Reset your password</h2>
+
+    <p>
+      Enter your registered email address. We will send you
+      a secure link to create a new password.
+    </p>
+
+    <form id="recoveryForm" class="auth-form">
+
+      <div class="form-group">
+
+        <label for="recoveryEmail">Email address</label>
+
+        <input
+          id="recoveryEmail"
+          type="email"
+          autocomplete="email"
+          placeholder="Enter your registered email"
+          required
+        >
+
+      </div>
+
+      <div class="recovery-actions">
+
+        <button
+          type="submit"
+          id="sendResetEmailButton"
+          class="primary-button"
+        >
+          Send Reset Link
+        </button>
+
+        <button
+          type="button"
+          id="backToLoginButton"
+          class="secondary-button"
+        >
+          Back to Sign In
+        </button>
+
+      </div>
+
+    </form>
+
+    <p
+      id="recoveryMessage"
+      class="auth-message"
+      role="status"
+    ></p>
+
+  </main>
+
+  <!-- ===================================
+       SET NEW PASSWORD
+  ==================================== -->
+
+  <main
+    id="newPasswordScreen"
+    class="recovery-screen"
+    hidden
+  >
+
+    <h2>Create a new password</h2>
+
+    <p>
+      Choose a new password for your Pothole Vision account.
+    </p>
+
+    <form id="newPasswordForm" class="auth-form">
+
+      <div class="form-group">
+
+        <label for="newPassword">New password</label>
+
+        <input
+          id="newPassword"
+          type="password"
+          autocomplete="new-password"
+          minlength="8"
+          placeholder="At least 8 characters"
+          required
+        >
+
+      </div>
+
+      <div class="form-group">
+
+        <label for="confirmNewPassword">
+          Confirm new password
+        </label>
+
+        <input
+          id="confirmNewPassword"
+          type="password"
+          autocomplete="new-password"
+          minlength="8"
+          placeholder="Re-enter your new password"
+          required
+        >
+
+      </div>
+
+      <div class="recovery-actions">
+
+        <button
+          type="submit"
+          id="saveNewPasswordButton"
+          class="primary-button"
+        >
+          Save New Password
+        </button>
+
+      </div>
+
+    </form>
+
+    <p
+      id="newPasswordMessage"
+      class="auth-message"
+      role="status"
+    ></p>
+
+  </main>
+
+  <!-- ===================================
+       APPLICATION WORKSPACE
+       Used by the existing camera workflow
   ==================================== -->
 
   <main id="appWorkspace" hidden>
@@ -596,12 +748,14 @@
 
           <div>
             <h2>Road Inspection</h2>
-            <p>Upload a road image or capture one using your camera.</p>
+            <p>
+              Upload a road image or capture one using your camera.
+            </p>
           </div>
 
         </div>
 
-        <!-- IMAGE UPLOAD BOX -->
+        <!-- IMAGE UPLOAD -->
 
         <div class="upload-container">
 
@@ -611,7 +765,9 @@
 
             <h3>Select a road image</h3>
 
-            <p>Choose an existing photograph from your device.</p>
+            <p>
+              Choose an existing photograph from your device.
+            </p>
 
             <input
               type="file"
@@ -710,7 +866,7 @@
 
         </section>
 
-        <!-- CONFIDENCE -->
+        <!-- CONFIDENCE THRESHOLD -->
 
         <div class="confidence-section">
 
@@ -741,7 +897,7 @@
 
         </div>
 
-        <!-- GPS -->
+        <!-- GPS INSPECTION LOCATION -->
 
         <section class="gps-section">
 
@@ -756,7 +912,10 @@
 
           </div>
 
-          <p id="locationStatus" class="location-status">
+          <p
+            id="locationStatus"
+            class="location-status"
+          >
             Location will be requested when detection starts.
           </p>
 
@@ -792,7 +951,11 @@
           DETECT POTHOLES
         </button>
 
-        <p id="status" class="status-message" role="status">
+        <p
+          id="status"
+          class="status-message"
+          role="status"
+        >
           Choose a road image or take a photograph to begin.
         </p>
 
@@ -809,7 +972,7 @@
     </section>
 
     <!-- =================================
-         POTHOLE MAP
+         SAVED INSPECTION MAP
     ================================== -->
 
     <section
@@ -824,12 +987,12 @@
 
         <div>
           <h2>Pothole Map</h2>
-          <p>Explore the geographical locations of saved inspections.</p>
+          <p>
+            Explore the geographical locations of saved inspections.
+          </p>
         </div>
 
       </div>
-
-      <!-- MAP TOOLBAR -->
 
       <div class="map-toolbar">
 
@@ -843,20 +1006,14 @@
 
       </div>
 
-      <!-- LEAFLET MAP -->
-
       <div
         id="inspectionMap"
         aria-label="Map of saved pothole inspections"
       ></div>
 
-      <!-- MAP LEGEND -->
-
       <div class="map-legend">
-
         <span class="legend-dot"></span>
         <span>Saved inspection location</span>
-
       </div>
 
       <p class="map-disclaimer">
@@ -865,9 +1022,7 @@
       </p>
 
       <p class="map-attribution">
-
         Map data ©
-
         <a
           href="https://www.openstreetmap.org/copyright"
           target="_blank"
@@ -875,7 +1030,6 @@
         >
           OpenStreetMap contributors
         </a>
-
       </p>
 
     </section>
@@ -901,24 +1055,31 @@
 </div>
 
 <!-- =====================================
-     LIBRARIES
+     REQUIRED LIBRARIES
 ===================================== -->
 
+<!-- ONNX Runtime: AI model inference -->
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
 
+<!-- Supabase: authentication and database -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- MapLibre: 3D globe and map rendering -->
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 
 <!-- =====================================
      APPLICATION SCRIPTS
+     ORDER IS IMPORTANT
 ===================================== -->
 
+<!-- Existing authentication, camera and AI detection -->
 <script src="./script.js"></script>
+
+<!-- New 3D globe and GPS navigation -->
 <script src="./map.js"></script>
 
 <!-- =====================================
-     PROFILE MENU INTERACTION
+     ACCOUNT MENU INTERACTION
 ===================================== -->
 
 <script>
@@ -947,25 +1108,22 @@
     menuButton.setAttribute("aria-expanded", "true");
   }
 
-  // Toggle profile menu.
   menuButton.addEventListener("click", (event) => {
     event.stopPropagation();
 
-    if (accountPanel.classList.contains("account-menu-open")) {
+    if (!accountPanel.hidden) {
       closeAccountMenu();
     } else {
       openAccountMenu();
     }
   });
 
-  // Close menu when clicking outside.
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".account-menu-container")) {
       closeAccountMenu();
     }
   });
 
-  // Close with Escape.
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeAccountMenu();
@@ -973,21 +1131,16 @@
     }
   });
 
-  // Respond to authentication changes.
   window.addEventListener("potholevision:auth", (event) => {
     const user = event.detail?.user;
 
-    if (user) {
-      menuButton.hidden = false;
-      closeAccountMenu();
-    } else {
-      menuButton.hidden = true;
-      closeAccountMenu();
-    }
+    menuButton.hidden = !user;
+
+    closeAccountMenu();
   });
 
-  // Initial profile icon state.
-  const initialUser = window.PotholeVision?.currentUser;
+  const initialUser =
+    window.PotholeVision?.currentUser;
 
   menuButton.hidden = !initialUser;
 
