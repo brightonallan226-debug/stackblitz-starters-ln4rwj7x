@@ -1,24 +1,24 @@
-
 "use strict";
 
 /* ============================================================
    POTHOLE VISION
-   MAP-FIRST NAVIGATION — STABLE TEST VERSION
+   MAP-FIRST NAVIGATION — SATELLITE GLOBE VERSION
 
    Login
       ↓
-   OpenStreetMap
+   Satellite globe centred on Africa
       ↓
    Request phone GPS
       ↓
-   Navigate to user's location
+   Fly to user's location
+      ↓
+   Tilted local satellite map
       ↓
    Follow phone movement
       ↓
    Record Pothole
       ↓
    Existing camera and AI detection workflow
-
    ============================================================ */
 
 (() => {
@@ -28,8 +28,8 @@
     ======================================================== */
 
     const CONFIG = {
-        initialCenter: [0, 0],
-        initialZoom: 2,
+        initialCenter: [20, 0],
+        initialZoom: 1.7,
 
         destinationZoom: 17,
         destinationPitch: 50,
@@ -44,8 +44,15 @@
     let map = null;
     let userMarker = null;
 
+    let globeRotationTimer = null;
+    let globeLongitude = CONFIG.initialCenter[0];
+
     let currentPosition = null;
     let previousPosition = null;
+
+    // Direction of travel, in degrees clockwise from true north.
+    let currentHeading = 0;
+    let headingAvailable = false;
 
     let gpsWatchId = null;
     let gpsStarted = false;
@@ -96,7 +103,7 @@
                 inset: 0;
                 width: 100%;
                 height: 100%;
-                background: #e8edf0;
+                background: #080e18;
             }
 
             .pv-map-top {
@@ -145,7 +152,6 @@
 
             .pv-gps-status::before {
                 content: "";
-
                 display: inline-block;
 
                 width: 7px;
@@ -278,6 +284,20 @@
                 border: 3px solid white;
 
                 box-shadow: 0 0 14px #b7f34a;
+            }
+
+            .pv-user-marker .pv-direction-arrow {
+                position: absolute;
+                width: 36px;
+                height: 44px;
+                left: -3px;
+                top: -7px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                filter:
+                    drop-shadow(0 0 5px rgba(183,243,74,0.9))
+                    drop-shadow(0 2px 5px rgba(0,0,0,0.8));
             }
 
             @keyframes pv-location-pulse {
@@ -414,12 +434,10 @@
     }
 
     /* ========================================================
-       OPENSTREETMAP STYLE
+       SATELLITE MAP STYLE
 
-       Diagnostic map layer.
-
-       This replaces the satellite imagery temporarily
-       so that we can confirm the map renders correctly.
+       Esri World Imagery is used for both the globe and
+       local navigation map.
     ======================================================== */
 
     function createMapStyle() {
@@ -430,18 +448,21 @@
 
             sources: {
 
-                openstreetmap: {
+                satellite: {
 
                     type: "raster",
 
                     tiles: [
-                        "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+
+                        "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+
                     ],
 
                     tileSize: 256,
+                    maxzoom: 19,
 
                     attribution:
-                        "© OpenStreetMap contributors"
+                        "Tiles © Esri — Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
 
                 }
 
@@ -451,11 +472,11 @@
 
                 {
 
-                    id: "openstreetmap-layer",
+                    id: "satellite-imagery",
 
                     type: "raster",
 
-                    source: "openstreetmap",
+                    source: "satellite",
 
                     minzoom: 0,
                     maxzoom: 19
@@ -542,6 +563,8 @@
 
                 zoom: CONFIG.initialZoom,
 
+                projection: { type: "globe" },
+
                 pitch: 0,
 
                 bearing: 0,
@@ -562,6 +585,25 @@
 
             );
 
+            /*
+             * IMPORTANT CORRECTION:
+             * Reapply globe projection after the satellite
+             * style loads. This keeps the Earth spherical.
+             */
+
+            map.on("style.load", () => {
+
+                map.setProjection({
+                    type: "globe"
+                });
+
+                console.log(
+                    "Active map projection:",
+                    map.getProjection()
+                );
+
+            });
+
             map.on("load", () => {
 
                 mapInitialized = true;
@@ -569,15 +611,21 @@
                 map.resize();
 
                 setStatus(
-                    "Map loaded — acquiring GPS"
+                    "Satellite globe loaded — acquiring GPS"
                 );
 
                 console.log(
-                    "Pothole Vision map successfully loaded."
+                    "Pothole Vision satellite globe successfully loaded."
                 );
 
                 if (currentPosition) {
+
                     moveToUser();
+
+                } else {
+
+                    startGlobeRotation();
+
                 }
 
             });
@@ -620,6 +668,167 @@
     }
 
     /* ========================================================
+       GLOBE ROTATION
+
+       Slowly rotate the satellite globe while waiting for GPS.
+       Stop when the first phone location is received.
+    ======================================================== */
+
+    function startGlobeRotation() {
+
+        if (
+            !map ||
+            !mapInitialized ||
+            firstGPSFix ||
+            globeRotationTimer !== null
+        ) {
+            return;
+        }
+
+        globeRotationTimer = window.setInterval(() => {
+
+            if (
+                !map ||
+                !mapInitialized ||
+                firstGPSFix
+            ) {
+
+                stopGlobeRotation();
+
+                return;
+
+            }
+
+            globeLongitude += 0.12;
+
+            if (globeLongitude > 180) {
+                globeLongitude -= 360;
+            }
+
+            map.setCenter([
+                globeLongitude,
+                0
+            ]);
+
+        }, 100);
+
+    }
+
+    function stopGlobeRotation() {
+
+        if (globeRotationTimer !== null) {
+
+            window.clearInterval(
+                globeRotationTimer
+            );
+
+            globeRotationTimer = null;
+
+        }
+
+    }
+
+    /* ========================================================
+       DIRECTION AND HEADING
+
+       GPS heading is preferred while moving. If the device does
+       not provide it, direction is estimated from successive GPS
+       positions. The last reliable heading is retained while still.
+    ======================================================== */
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+
+        const toRad = value => value * Math.PI / 180;
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+
+        const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) *
+            Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) ** 2;
+
+        return 6371000 * 2 * Math.atan2(
+            Math.sqrt(a),
+            Math.sqrt(1 - a)
+        );
+
+    }
+
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+
+        const toRad = value => value * Math.PI / 180;
+        const toDeg = value => value * 180 / Math.PI;
+
+        const phi1 = toRad(lat1);
+        const phi2 = toRad(lat2);
+        const deltaLon = toRad(lon2 - lon1);
+
+        const y = Math.sin(deltaLon) * Math.cos(phi2);
+        const x =
+            Math.cos(phi1) * Math.sin(phi2) -
+            Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLon);
+
+        return (toDeg(Math.atan2(y, x)) + 360) % 360;
+
+    }
+
+    function updateHeading(coords, nextPosition) {
+
+        let newHeading = null;        // A GPS heading is useful only when the phone is moving.
+        if (
+            Number.isFinite(coords.heading) &&
+            coords.heading !== null &&
+            Number.isFinite(coords.speed) &&
+            coords.speed > 0.8
+        ) {
+            newHeading = coords.heading;
+        }
+
+        // Fall back to the bearing between reliable GPS fixes.
+        if (
+            newHeading === null &&
+            previousPosition &&
+            Number.isFinite(coords.accuracy) &&
+            coords.accuracy <= 30
+        ) {
+            const distance = calculateDistance(
+                previousPosition.latitude,
+                previousPosition.longitude,
+                nextPosition.latitude,
+                nextPosition.longitude
+            );
+
+            if (distance >= 5) {
+                newHeading = calculateBearing(
+                    previousPosition.latitude,
+                    previousPosition.longitude,
+                    nextPosition.latitude,
+                    nextPosition.longitude
+                );
+            }
+        }
+
+        if (newHeading === null) return;
+
+        if (!headingAvailable) {
+            currentHeading = newHeading;
+            headingAvailable = true;
+        } else {
+            // Shortest angular difference handles 359° -> 1° correctly.
+            const difference =
+                ((newHeading - currentHeading + 540) % 360) - 180;
+
+            // Ignore very small GPS fluctuations and smooth turns.
+            if (Math.abs(difference) < 4) return;
+
+            currentHeading =
+                (currentHeading + difference * 0.35 + 360) % 360;
+        }
+
+    }
+
+    /* ========================================================
        USER LOCATION MARKER
     ======================================================== */
 
@@ -652,7 +861,23 @@
 
                 <div class="pv-pulse"></div>
 
-                <div class="pv-dot"></div>
+                <div class="pv-direction-arrow">
+                    <svg
+                        viewBox="0 0 40 48"
+                        width="36"
+                        height="44"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M20 2 L37 42 L20 32 L3 42 Z"
+                            fill="#b7f34a"
+                            stroke="#ffffff"
+                            stroke-width="2.5"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                </div>
 
             `;
 
@@ -718,6 +943,14 @@
 
             firstGPSFix = true;
 
+            stopGlobeRotation();
+
+            /*
+             * IMPORTANT CORRECTION:
+             * Do NOT change to Mercator here.
+             * Keep globe projection active during GPS fly-in.
+             */
+
             map.flyTo({
 
                 center: destination,
@@ -726,9 +959,9 @@
 
                 pitch: CONFIG.destinationPitch,
 
-                bearing: 0,
+                bearing: headingAvailable ? currentHeading : 0,
 
-                duration: 3500,
+                duration: 4500,
 
                 essential: true
 
@@ -760,93 +993,64 @@
 
         const coords = position.coords;
 
-        currentPosition = {
-
+        const nextPosition = {
             latitude: coords.latitude,
-
             longitude: coords.longitude,
-
             accuracy: coords.accuracy,
-
             heading: coords.heading,
-
             speed: coords.speed
-
         };
 
-        console.log(
-            "GPS position:",
-            currentPosition
-        );
+        // Keep the last fix available for the movement-bearing fallback.
+        previousPosition = currentPosition;
+        currentPosition = nextPosition;
 
-        /* Update marker and map */
+        updateHeading(coords, nextPosition);
+
+        console.log("GPS position:", currentPosition);
+        console.log(
+            "Travel heading:",
+            headingAvailable ? currentHeading : "Waiting for movement"
+        );
 
         if (mapInitialized) {
 
             if (!firstGPSFix) {
-
                 moveToUser();
-
             } else {
-
                 addUserMarker();
 
                 if (CONFIG.followUser) {
-
                     map.easeTo({
-
                         center: [
-
                             currentPosition.longitude,
-
                             currentPosition.latitude
-
                         ],
-
+                        bearing: headingAvailable
+                            ? currentHeading
+                            : map.getBearing(),
                         duration: 700,
-
                         essential: true
-
                     });
-
                 }
-
             }
 
         }
 
-        /* Share GPS coordinates with main application */
-
-        window.PotholeVision =
-            window.PotholeVision || {};
+        /* Share GPS coordinates with the main application. */
+        window.PotholeVision = window.PotholeVision || {};
 
         window.PotholeVision.currentLocation = {
-
             latitude: currentPosition.latitude,
-
             longitude: currentPosition.longitude,
-
             accuracy: currentPosition.accuracy
-
         };
 
         window.dispatchEvent(
-
-            new CustomEvent(
-                "potholevision:location-updated",
-
-                {
-
-                    detail:
-                        window.PotholeVision.currentLocation
-
-                }
-
-            )
-
+            new CustomEvent("potholevision:location-updated", {
+                detail: window.PotholeVision.currentLocation
+            })
         );
-
-        previousPosition = currentPosition;
 
     }
 
@@ -974,6 +1178,8 @@
 
     function stopGPS() {
 
+        stopGlobeRotation();
+
         if (gpsWatchId !== null) {
 
             navigator.geolocation.clearWatch(
@@ -989,6 +1195,10 @@
         currentPosition = null;
 
         previousPosition = null;
+
+        currentHeading = 0;
+
+        headingAvailable = false;
 
         firstGPSFix = false;
 
@@ -1023,13 +1233,9 @@
             return;
         }
 
-        /* Hide map interface temporarily */
-
         globeScreen.classList.remove(
             "pv-active"
         );
-
-        /* Reveal existing application */
 
         const appWorkspace =
             document.getElementById("appWorkspace");
@@ -1057,8 +1263,6 @@
             mapView.hidden = true;
 
         }
-
-        /* Existing camera workflow */
 
         cameraButton.click();
 
@@ -1132,8 +1336,6 @@
         authenticated = true;
 
         createInterface();
-
-        /* Hide login and old dashboard */
 
         const loginScreen =
             document.getElementById("loginScreen");
@@ -1334,6 +1536,10 @@
                     zoom: CONFIG.destinationZoom,
 
                     pitch: CONFIG.destinationPitch,
+
+                    bearing: headingAvailable
+                        ? currentHeading
+                        : map.getBearing(),
 
                     duration: 2000,
 
