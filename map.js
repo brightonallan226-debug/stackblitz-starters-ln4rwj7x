@@ -60,6 +60,7 @@
     let authenticated = false;
     let mapInitialized = false;
     let firstGPSFix = false;
+    let localZoomComplete = false;
 
     let globeScreen = null;
     let mapElement = null;
@@ -286,18 +287,47 @@
                 box-shadow: 0 0 14px #b7f34a;
             }
 
+            /* Glowing location sphere shown during globe and fly-in */
+            .pv-user-marker .pv-location-sphere {
+                position: absolute;
+                width: 13px;
+                height: 13px;
+                left: 8.5px;
+                top: 8.5px;
+                border-radius: 50%;
+                background: radial-gradient(circle at 35% 30%, #ffffff 0%, #dfffaa 18%, #b7f34a 48%, #6d9f20 100%);
+                border: 1px solid rgba(255,255,255,0.95);
+                box-shadow: 0 0 8px rgba(183,243,74,0.95), 0 0 18px rgba(183,243,74,0.55);
+                z-index: 2;
+            }
+
+            /* Direction arrow remains hidden until the fly-in finishes */
             .pv-user-marker .pv-direction-arrow {
                 position: absolute;
-                width: 36px;
-                height: 44px;
-                left: -3px;
-                top: -7px;
+                width: 18px;
+                height: 24px;
+                left: 6px;
+                top: -12px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                opacity: 0;
+                visibility: hidden;
+                transition: opacity 250ms ease, visibility 250ms ease;
                 filter:
-                    drop-shadow(0 0 5px rgba(183,243,74,0.9))
-                    drop-shadow(0 2px 5px rgba(0,0,0,0.8));
+                    drop-shadow(0 0 2px rgba(183,243,74,0.75))
+                    drop-shadow(0 1px 2px rgba(0,0,0,0.8));
+                z-index: 3;
+            }
+
+            .pv-user-marker.pv-navigation-ready .pv-direction-arrow {
+                opacity: 1;
+                visibility: visible;
+            }
+
+            .pv-user-marker.pv-navigation-ready .pv-location-sphere {
+                opacity: 0;
+                visibility: hidden;
             }
 
             @keyframes pv-location-pulse {
@@ -767,790 +797,803 @@
         const y = Math.sin(deltaLon) * Math.cos(phi2);
         const x =
             Math.cos(phi1) * Math.sin(phi2) -
-            Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLon);
+            Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLon);        return (toDeg(Math.atan2(y, x)) + 360) % 360;
 
-        return (toDeg(Math.atan2(y, x)) + 360) % 360;
-
-    }
-
-    function updateHeading(coords, nextPosition) {
-
-        let newHeading = null;        // A GPS heading is useful only when the phone is moving.
-        if (
-            Number.isFinite(coords.heading) &&
-            coords.heading !== null &&
-            Number.isFinite(coords.speed) &&
-            coords.speed > 0.8
-        ) {
-            newHeading = coords.heading;
         }
-
-        // Fall back to the bearing between reliable GPS fixes.
-        if (
-            newHeading === null &&
-            previousPosition &&
-            Number.isFinite(coords.accuracy) &&
-            coords.accuracy <= 30
-        ) {
-            const distance = calculateDistance(
-                previousPosition.latitude,
-                previousPosition.longitude,
-                nextPosition.latitude,
-                nextPosition.longitude
-            );
-
-            if (distance >= 5) {
-                newHeading = calculateBearing(
+    
+        function updateHeading(coords, nextPosition) {
+    
+            let newHeading = null;
+    
+            // A GPS heading is useful only when the phone is moving.
+            if (
+                Number.isFinite(coords.heading) &&
+                coords.heading !== null &&
+                Number.isFinite(coords.speed) &&
+                coords.speed > 0.8
+            ) {
+                newHeading = coords.heading;
+            }
+    
+            // Fall back to the bearing between reliable GPS fixes.
+            if (
+                newHeading === null &&
+                previousPosition &&
+                Number.isFinite(coords.accuracy) &&
+                coords.accuracy <= 30
+            ) {
+                const distance = calculateDistance(
                     previousPosition.latitude,
                     previousPosition.longitude,
                     nextPosition.latitude,
                     nextPosition.longitude
                 );
+    
+                if (distance >= 5) {
+                    newHeading = calculateBearing(
+                        previousPosition.latitude,
+                        previousPosition.longitude,
+                        nextPosition.latitude,
+                        nextPosition.longitude
+                    );
+                }
             }
-        }
-
-        if (newHeading === null) return;
-
-        if (!headingAvailable) {
-            currentHeading = newHeading;
-            headingAvailable = true;
-        } else {
-            // Shortest angular difference handles 359° -> 1° correctly.
-            const difference =
-                ((newHeading - currentHeading + 540) % 360) - 180;
-
-            // Ignore very small GPS fluctuations and smooth turns.
-            if (Math.abs(difference) < 4) return;
-
-            currentHeading =
-                (currentHeading + difference * 0.35 + 360) % 360;
-        }
-
-    }
-
-    /* ========================================================
-       USER LOCATION MARKER
-    ======================================================== */
-
-    function addUserMarker() {
-
-        if (
-            !map ||
-            !mapInitialized ||
-            !currentPosition
-        ) {
-            return;
-        }
-
-        const coordinates = [
-
-            currentPosition.longitude,
-
-            currentPosition.latitude
-
-        ];
-
-        if (!userMarker) {
-
-            const element =
-                document.createElement("div");
-
-            element.className = "pv-user-marker";
-
-            element.innerHTML = `
-
-                <div class="pv-pulse"></div>
-
-                <div class="pv-direction-arrow">
-                    <svg
-                        viewBox="0 0 40 48"
-                        width="36"
-                        height="44"
-                        xmlns="http://www.w3.org/2000/svg"
-                        aria-hidden="true"
-                    >
-                        <path
-                            d="M20 2 L37 42 L20 32 L3 42 Z"
-                            fill="#b7f34a"
-                            stroke="#ffffff"
-                            stroke-width="2.5"
-                            stroke-linejoin="round"
-                        />
-                    </svg>
-                </div>
-
-            `;
-
-            userMarker = new maplibregl.Marker({
-
-                element: element,
-
-                anchor: "center"
-
-            })
-
-                .setLngLat(coordinates)
-
-                .addTo(map);
-
-        } else {
-
-            userMarker.setLngLat(coordinates);
-
-        }
-
-        recordButton.disabled = false;
-
-        locationTitle.textContent =
-            "Your current location";
-
-        locationCoordinates.textContent =
-
-            currentPosition.latitude.toFixed(6) +
-            ", " +
-            currentPosition.longitude.toFixed(6);
-
-        setStatus(
-            "GPS location connected",
-            "connected"
-        );
-
-    }
-
-    /* ========================================================
-       MOVE MAP TO USER
-    ======================================================== */
-
-    function moveToUser() {
-
-        if (
-            !map ||
-            !mapInitialized ||
-            !currentPosition
-        ) {
-            return;
-        }
-
-        const destination = [
-
-            currentPosition.longitude,
-
-            currentPosition.latitude
-
-        ];
-
-        if (!firstGPSFix) {
-
-            firstGPSFix = true;
-
-            stopGlobeRotation();
-
-            /*
-             * IMPORTANT CORRECTION:
-             * Do NOT change to Mercator here.
-             * Keep globe projection active during GPS fly-in.
-             */
-
-            map.flyTo({
-
-                center: destination,
-
-                zoom: CONFIG.destinationZoom,
-
-                pitch: CONFIG.destinationPitch,
-
-                bearing: headingAvailable ? currentHeading : 0,
-
-                duration: 4500,
-
-                essential: true
-
-            });
-
-        } else if (CONFIG.followUser) {
-
-            map.easeTo({
-
-                center: destination,
-
-                duration: 700,
-
-                essential: true
-
-            });
-
-        }
-
-        addUserMarker();
-
-    }
-
-    /* ========================================================
-       GPS POSITION UPDATE
-    ======================================================== */
-
-    function handlePosition(position) {
-
-        const coords = position.coords;
-
-        const nextPosition = {
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            accuracy: coords.accuracy,
-            heading: coords.heading,
-            speed: coords.speed
-        };
-
-        // Keep the last fix available for the movement-bearing fallback.
-        previousPosition = currentPosition;
-        currentPosition = nextPosition;
-
-        updateHeading(coords, nextPosition);
-
-        console.log("GPS position:", currentPosition);
-        console.log(
-            "Travel heading:",
-            headingAvailable ? currentHeading : "Waiting for movement"
-        );
-
-        if (mapInitialized) {
-
-            if (!firstGPSFix) {
-                moveToUser();
+    
+            if (newHeading === null) return;
+    
+            if (!headingAvailable) {
+                currentHeading = newHeading;
+                headingAvailable = true;
             } else {
-                addUserMarker();
-
-                if (CONFIG.followUser) {
-                    map.easeTo({
-                        center: [
-                            currentPosition.longitude,
-                            currentPosition.latitude
-                        ],
-                        bearing: headingAvailable
-                            ? currentHeading
-                            : map.getBearing(),
-                        duration: 700,
-                        essential: true
-                    });
-                }
+                // Shortest angular difference handles 359° -> 1° correctly.
+                const difference =
+                    ((newHeading - currentHeading + 540) % 360) - 180;
+    
+                // Ignore very small GPS fluctuations and smooth turns.
+                if (Math.abs(difference) < 4) return;
+    
+                currentHeading =
+                    (currentHeading + difference * 0.35 + 360) % 360;
             }
-
+    
         }
-
-        /* Share GPS coordinates with the main application. */
-        window.PotholeVision = window.PotholeVision || {};
-
-        window.PotholeVision.currentLocation = {
-            latitude: currentPosition.latitude,
-            longitude: currentPosition.longitude,
-            accuracy: currentPosition.accuracy
-        };
-
-        window.dispatchEvent(
-            new CustomEvent("potholevision:location-updated", {
-                detail: window.PotholeVision.currentLocation
-            })
-        );
-
-    }
-
-    /* ========================================================
-       GPS ERROR HANDLING
-    ======================================================== */
-
-    function handleGPSError(error) {
-
-        console.error(
-            "GPS error:",
-            error
-        );
-
-        let message =
-            "Unable to obtain GPS location";
-
-        if (error.code === 1) {
-
-            message =
-                "Location permission denied. Check browser settings.";
-
-        } else if (error.code === 2) {
-
-            message =
-                "GPS unavailable. Check phone location services.";
-
-        } else if (error.code === 3) {
-
-            message =
-                "GPS timed out. Waiting for another reading.";
-
-        }
-
-        setStatus(
-            message,
-            "error"
-        );
-
-        if (locationTitle) {
-
+    
+        /* ========================================================
+           USER LOCATION MARKER
+        ======================================================== */
+    
+        function addUserMarker() {
+    
+            if (
+                !map ||
+                !mapInitialized ||
+                !currentPosition
+            ) {
+                return;
+            }
+    
+            const coordinates = [
+    
+                currentPosition.longitude,
+    
+                currentPosition.latitude
+    
+            ];
+    
+            if (!userMarker) {
+    
+                const element =
+                    document.createElement("div");
+    
+                element.className = "pv-user-marker";
+    
+                element.innerHTML = `
+    
+                    <div class="pv-pulse"></div>
+                    <div class="pv-location-sphere"></div>
+    
+                    <div class="pv-direction-arrow">
+                        <svg
+                            viewBox="0 0 40 48"
+                            width="18"
+                            height="24"
+                            xmlns="http://www.w3.org/2000/svg"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d="M20 2 L37 42 L20 32 L3 42 Z"
+                                fill="#b7f34a"
+                                stroke="#ffffff"
+                                stroke-width="1.5"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+                    </div>
+    
+                `;
+    
+                if (localZoomComplete) {
+                    element.classList.add("pv-navigation-ready");
+                }
+    
+                userMarker = new maplibregl.Marker({
+    
+                    element: element,
+    
+                    anchor: "center"
+    
+                })
+    
+                    .setLngLat(coordinates)
+    
+                    .addTo(map);
+    
+            } else {
+    
+                userMarker.setLngLat(coordinates);
+    
+            }
+    
+            recordButton.disabled = false;
+    
             locationTitle.textContent =
-                "GPS connection problem";
-
-        }
-
-        if (locationCoordinates) {
-
+                "Your current location";
+    
             locationCoordinates.textContent =
-                message;
-
-        }
-
-    }
-
-    /* ========================================================
-       START GPS TRACKING
-    ======================================================== */
-
-    function startGPS() {
-
-        if (gpsStarted) {
-            return;
-        }
-
-        if (!navigator.geolocation) {
-
+    
+                currentPosition.latitude.toFixed(6) +
+                ", " +
+                currentPosition.longitude.toFixed(6);
+    
             setStatus(
-                "This browser does not support GPS",
-                "error"
+                "GPS location connected",
+                "connected"
             );
-
-            return;
+    
         }
-
-        if (!window.isSecureContext) {
-
-            setStatus(
-                "GPS requires a secure HTTPS connection",
-                "error"
-            );
-
-            return;
-        }
-
-        gpsStarted = true;
-
-        setStatus(
-            "Requesting phone GPS location"
-        );
-
-        locationTitle.textContent =
-            "Finding your location";
-
-        locationCoordinates.textContent =
-            "Waiting for GPS coordinates...";
-
-        gpsWatchId =
-            navigator.geolocation.watchPosition(
-
-                handlePosition,
-
-                handleGPSError,
-
-                {
-
-                    enableHighAccuracy:
-                        CONFIG.enableHighAccuracy,
-
-                    timeout:
-                        CONFIG.gpsTimeout,
-
-                    maximumAge:
-                        CONFIG.gpsMaximumAge
-
-                }
-
-            );
-
-    }
-
-    /* ========================================================
-       STOP GPS TRACKING
-    ======================================================== */
-
-    function stopGPS() {
-
-        stopGlobeRotation();
-
-        if (gpsWatchId !== null) {
-
-            navigator.geolocation.clearWatch(
-                gpsWatchId
-            );
-
-        }
-
-        gpsWatchId = null;
-
-        gpsStarted = false;
-
-        currentPosition = null;
-
-        previousPosition = null;
-
-        currentHeading = 0;
-
-        headingAvailable = false;
-
-        firstGPSFix = false;
-
-    }
-
-    /* ========================================================
-       RECORD POTHOLE
-
-       Reuses existing camera and AI workflow.
-    ======================================================== */
-
-    function openExistingRecordingWorkflow() {
-
-        const cameraButton =
-            document.getElementById("cameraButton");
-
-        if (!cameraButton) {
-
-            alert(
-                "The existing camera workflow could not be found."
-            );
-
-            return;
-        }
-
-        if (!currentPosition) {
-
-            alert(
-                "Please wait until your phone GPS location is available."
-            );
-
-            return;
-        }
-
-        globeScreen.classList.remove(
-            "pv-active"
-        );
-
-        const appWorkspace =
-            document.getElementById("appWorkspace");
-
-        const inspectionView =
-            document.getElementById("inspectionView");
-
-        const mapView =
-            document.getElementById("mapView");
-
-        if (appWorkspace) {
-
-            appWorkspace.hidden = false;
-
-        }
-
-        if (inspectionView) {
-
-            inspectionView.hidden = false;
-
-        }
-
-        if (mapView) {
-
-            mapView.hidden = true;
-
-        }
-
-        cameraButton.click();
-
-    }
-
-    /* ========================================================
-       RETURN TO MAP AFTER INSPECTION
-    ======================================================== */
-
-    function returnToMap() {
-
-        if (!authenticated) {
-            return;
-        }
-
-        const appWorkspace =
-            document.getElementById("appWorkspace");
-
-        if (appWorkspace) {
-
-            appWorkspace.hidden = true;
-
-        }
-
-        if (globeScreen) {
-
-            globeScreen.classList.add(
-                "pv-active"
-            );
-
-        }
-
-        if (map) {
-
-            map.resize();
-
-        }
-
-        if (currentPosition) {
-
-            moveToUser();
-
-        }
-
-    }
-
-    window.addEventListener(
-
-        "potholevision:inspection-saved",
-
-        returnToMap
-
-    );
-
-    /* ========================================================
-       AUTHENTICATION
-    ======================================================== */
-
-    function onAuthenticated(event) {
-
-        const user = event.detail?.user;
-
-        if (!user) {
-
-            onSignedOut();
-
-            return;
-
-        }
-
-        authenticated = true;
-
-        createInterface();
-
-        const loginScreen =
-            document.getElementById("loginScreen");
-
-        const recoveryScreen =
-            document.getElementById("recoveryScreen");
-
-        const newPasswordScreen =
-            document.getElementById("newPasswordScreen");
-
-        const appWorkspace =
-            document.getElementById("appWorkspace");
-
-        const introSection =
-            document.querySelector(".intro-section");
-
-        const appHeader =
-            document.querySelector(".app-header");
-
-        const appFooter =
-            document.querySelector(".app-footer");
-
-        if (loginScreen) {
-            loginScreen.hidden = true;
-        }
-
-        if (recoveryScreen) {
-            recoveryScreen.hidden = true;
-        }
-
-        if (newPasswordScreen) {
-            newPasswordScreen.hidden = true;
-        }
-
-        if (appWorkspace) {
-            appWorkspace.hidden = true;
-        }
-
-        if (introSection) {
-            introSection.hidden = true;
-        }
-
-        if (appHeader) {
-            appHeader.hidden = true;
-        }
-
-        if (appFooter) {
-            appFooter.hidden = true;
-        }
-
-        globeScreen.classList.add(
-            "pv-active"
-        );
-
-        initialiseMap();
-
-        startGPS();
-
-        setTimeout(() => {
-
-            if (map) {
-                map.resize();
+    
+        /* ========================================================
+           MOVE MAP TO USER
+        ======================================================== */
+    
+        function moveToUser() {
+    
+            if (
+                !map ||
+                !mapInitialized ||
+                !currentPosition
+            ) {
+                return;
             }
-
-        }, 500);
-
-    }
-
-    /* ========================================================
-       SIGN OUT
-    ======================================================== */
-
-    function onSignedOut() {
-
-        authenticated = false;
-
-        stopGPS();
-
-        if (globeScreen) {
-
+    
+            const destination = [
+    
+                currentPosition.longitude,
+    
+                currentPosition.latitude
+    
+            ];
+    
+            if (!firstGPSFix) {
+    
+                firstGPSFix = true;
+                localZoomComplete = false;
+    
+                stopGlobeRotation();
+    
+                /*
+                 * Keep the glowing sphere visible during the globe-to-location
+                 * fly-in. Reveal the direction pointer only after the animation.
+                 */
+    
+                map.flyTo({
+    
+                    center: destination,
+    
+                    zoom: CONFIG.destinationZoom,
+    
+                    pitch: CONFIG.destinationPitch,
+    
+                    bearing: headingAvailable ? currentHeading : 0,
+    
+                    duration: 4500,
+    
+                    essential: true
+    
+                });
+    
+                map.once("moveend", () => {
+                    localZoomComplete = true;
+                    if (userMarker) {
+                        userMarker.getElement().classList.add("pv-navigation-ready");
+                    }
+                });
+    
+            } else if (CONFIG.followUser) {
+    
+                map.easeTo({
+    
+                    center: destination,
+    
+                    duration: 700,
+    
+                    essential: true
+    
+                });
+    
+            }
+    
+            addUserMarker();
+    
+        }
+    
+        /* ========================================================
+           GPS POSITION UPDATE
+        ======================================================== */
+    
+        function handlePosition(position) {
+    
+            const coords = position.coords;
+    
+            const nextPosition = {
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                accuracy: coords.accuracy,
+                heading: coords.heading,
+                speed: coords.speed
+            };
+    
+            // Keep the last fix available for the movement-bearing fallback.
+            previousPosition = currentPosition;
+            currentPosition = nextPosition;
+    
+            updateHeading(coords, nextPosition);
+    
+            console.log("GPS position:", currentPosition);
+            console.log(
+                "Travel heading:",
+                headingAvailable ? currentHeading : "Waiting for movement"
+            );
+    
+            if (mapInitialized) {
+    
+                if (!firstGPSFix) {
+                    moveToUser();
+                } else {
+                    addUserMarker();
+    
+                    if (CONFIG.followUser) {
+                        map.easeTo({
+                            center: [
+                                currentPosition.longitude,
+                                currentPosition.latitude
+                            ],
+                            bearing: headingAvailable
+                                ? currentHeading
+                                : map.getBearing(),
+                            duration: 700,
+                            essential: true
+                        });
+                    }
+                }
+    
+            }
+    
+            /* Share GPS coordinates with the main application. */
+            window.PotholeVision = window.PotholeVision || {};
+    
+            window.PotholeVision.currentLocation = {
+                latitude: currentPosition.latitude,
+                longitude: currentPosition.longitude,
+                accuracy: currentPosition.accuracy
+            };
+    
+            window.dispatchEvent(
+                new CustomEvent("potholevision:location-updated", {
+                    detail: window.PotholeVision.currentLocation
+                })
+            );
+    
+        }
+    
+        /* ========================================================
+           GPS ERROR HANDLING
+        ======================================================== */
+    
+        function handleGPSError(error) {
+    
+            console.error(
+                "GPS error:",
+                error
+            );
+    
+            let message =
+                "Unable to obtain GPS location";
+    
+            if (error.code === 1) {
+    
+                message =
+                    "Location permission denied. Check browser settings.";
+    
+            } else if (error.code === 2) {
+    
+                message =
+                    "GPS unavailable. Check phone location services.";
+    
+            } else if (error.code === 3) {
+    
+                message =
+                    "GPS timed out. Waiting for another reading.";
+    
+            }
+    
+            setStatus(
+                message,
+                "error"
+            );
+    
+            if (locationTitle) {
+    
+                locationTitle.textContent =
+                    "GPS connection problem";
+    
+            }
+    
+            if (locationCoordinates) {
+    
+                locationCoordinates.textContent =
+                    message;
+    
+            }
+    
+        }
+    
+        /* ========================================================
+           START GPS TRACKING
+        ======================================================== */
+    
+        function startGPS() {
+    
+            if (gpsStarted) {
+                return;
+            }
+    
+            if (!navigator.geolocation) {
+    
+                setStatus(
+                    "This browser does not support GPS",
+                    "error"
+                );
+    
+                return;
+            }
+    
+            if (!window.isSecureContext) {
+    
+                setStatus(
+                    "GPS requires a secure HTTPS connection",
+                    "error"
+                );
+    
+                return;
+            }
+    
+            gpsStarted = true;
+    
+            setStatus(
+                "Requesting phone GPS location"
+            );
+    
+            locationTitle.textContent =
+                "Finding your location";
+    
+            locationCoordinates.textContent =
+                "Waiting for GPS coordinates...";
+    
+            gpsWatchId =
+                navigator.geolocation.watchPosition(
+    
+                    handlePosition,
+    
+                    handleGPSError,
+    
+                    {
+    
+                        enableHighAccuracy:
+                            CONFIG.enableHighAccuracy,
+    
+                        timeout:
+                            CONFIG.gpsTimeout,
+    
+                        maximumAge:
+                            CONFIG.gpsMaximumAge
+    
+                    }
+    
+                );
+    
+        }
+    
+        /* ========================================================
+           STOP GPS TRACKING
+        ======================================================== */
+    
+        function stopGPS() {
+    
+            stopGlobeRotation();
+    
+            if (gpsWatchId !== null) {
+    
+                navigator.geolocation.clearWatch(
+                    gpsWatchId
+                );
+    
+            }
+    
+            gpsWatchId = null;
+    
+            gpsStarted = false;
+    
+            currentPosition = null;
+    
+            previousPosition = null;
+    
+            currentHeading = 0;
+    
+            headingAvailable = false;
+    
+            firstGPSFix = false;
+            localZoomComplete = false;
+    
+        }
+    
+        /* ========================================================
+           RECORD POTHOLE
+    
+           Reuses existing camera and AI workflow.
+        ======================================================== */
+    
+        function openExistingRecordingWorkflow() {
+    
+            const cameraButton =
+                document.getElementById("cameraButton");
+    
+            if (!cameraButton) {
+    
+                alert(
+                    "The existing camera workflow could not be found."
+                );
+    
+                return;
+            }
+    
+            if (!currentPosition) {
+    
+                alert(
+                    "Please wait until your phone GPS location is available."
+                );
+    
+                return;
+            }
+    
             globeScreen.classList.remove(
                 "pv-active"
             );
-
-        }
-
-        const loginScreen =
-            document.getElementById("loginScreen");
-
-        const introSection =
-            document.querySelector(".intro-section");
-
-        const appHeader =
-            document.querySelector(".app-header");
-
-        const appFooter =
-            document.querySelector(".app-footer");
-
-        if (loginScreen) {
-            loginScreen.hidden = false;
-        }
-
-        if (introSection) {
-            introSection.hidden = false;
-        }
-
-        if (appHeader) {
-            appHeader.hidden = false;
-        }
-
-        if (appFooter) {
-            appFooter.hidden = false;
-        }
-
-    }
-
-    window.addEventListener(
-        "potholevision:auth",
-        onAuthenticated
-    );
-
-    window.addEventListener(
-        "potholevision:signout",
-        onSignedOut
-    );
-
-    /* ========================================================
-       EXISTING SESSION CHECK
-    ======================================================== */
-
-    function checkExistingSession() {
-
-        const user =
-            window.PotholeVision?.currentUser;
-
-        if (user) {
-
-            onAuthenticated({
-
-                detail: {
-                    user: user
-                }
-
-            });
-
-        }
-
-    }
-
-    if (document.readyState === "loading") {
-
-        document.addEventListener(
-
-            "DOMContentLoaded",
-
-            checkExistingSession,
-
-            { once: true }
-
-        );
-
-    } else {
-
-        checkExistingSession();
-
-    }
-
-    /* ========================================================
-       PUBLIC MAP API
-    ======================================================== */
-
-    window.PotholeVisionMap = {
-
-        startLocationTracking: startGPS,
-
-        stopLocationTracking: stopGPS,
-
-        getCurrentPosition: () => currentPosition,
-
-        getMap: () => map,
-
-        returnToMap: returnToMap,
-
-        focusUser: () => {
-
-            if (currentPosition && map) {
-
-                map.flyTo({
-
-                    center: [
-
-                        currentPosition.longitude,
-
-                        currentPosition.latitude
-
-                    ],
-
-                    zoom: CONFIG.destinationZoom,
-
-                    pitch: CONFIG.destinationPitch,
-
-                    bearing: headingAvailable
-                        ? currentHeading
-                        : map.getBearing(),
-
-                    duration: 2000,
-
-                    essential: true
-
-                });
-
+    
+            const appWorkspace =
+                document.getElementById("appWorkspace");
+    
+            const inspectionView =
+                document.getElementById("inspectionView");
+    
+            const mapView =
+                document.getElementById("mapView");
+    
+            if (appWorkspace) {
+    
+                appWorkspace.hidden = false;
+    
             }
-
+    
+            if (inspectionView) {
+    
+                inspectionView.hidden = false;
+    
+            }
+    
+            if (mapView) {
+    
+                mapView.hidden = true;
+    
+            }
+    
+            cameraButton.click();
+    
         }
-
-    };
-
-})();
+    
+        /* ========================================================
+           RETURN TO MAP AFTER INSPECTION
+        ======================================================== */
+    
+        function returnToMap() {
+    
+            if (!authenticated) {
+                return;
+            }
+    
+            const appWorkspace =
+                document.getElementById("appWorkspace");
+    
+            if (appWorkspace) {
+    
+                appWorkspace.hidden = true;
+    
+            }
+    
+            if (globeScreen) {
+    
+                globeScreen.classList.add(
+                    "pv-active"
+                );
+    
+            }
+    
+            if (map) {
+    
+                map.resize();
+    
+            }
+    
+            if (currentPosition) {
+    
+                moveToUser();
+    
+            }
+    
+        }
+    
+        window.addEventListener(
+    
+            "potholevision:inspection-saved",
+    
+            returnToMap
+    
+        );
+    
+        /* ========================================================
+           AUTHENTICATION
+        ======================================================== */
+    
+        function onAuthenticated(event) {
+    
+            const user = event.detail?.user;
+    
+            if (!user) {
+    
+                onSignedOut();
+    
+                return;
+    
+            }
+    
+            authenticated = true;
+    
+            createInterface();
+    
+            const loginScreen =
+                document.getElementById("loginScreen");
+    
+            const recoveryScreen =
+                document.getElementById("recoveryScreen");
+    
+            const newPasswordScreen =
+                document.getElementById("newPasswordScreen");
+    
+            const appWorkspace =
+                document.getElementById("appWorkspace");
+    
+            const introSection =
+                document.querySelector(".intro-section");
+    
+            const appHeader =
+                document.querySelector(".app-header");
+    
+            const appFooter =
+                document.querySelector(".app-footer");
+    
+            if (loginScreen) {
+                loginScreen.hidden = true;
+            }
+    
+            if (recoveryScreen) {
+                recoveryScreen.hidden = true;
+            }
+    
+            if (newPasswordScreen) {
+                newPasswordScreen.hidden = true;
+            }
+    
+            if (appWorkspace) {
+                appWorkspace.hidden = true;
+            }
+    
+            if (introSection) {
+                introSection.hidden = true;
+            }
+    
+            if (appHeader) {
+                appHeader.hidden = true;
+            }
+    
+            if (appFooter) {
+                appFooter.hidden = true;
+            }
+    
+            globeScreen.classList.add(
+                "pv-active"
+            );
+    
+            initialiseMap();
+    
+            startGPS();
+    
+            setTimeout(() => {
+    
+                if (map) {
+                    map.resize();
+                }
+    
+            }, 500);
+    
+        }
+    
+        /* ========================================================
+           SIGN OUT
+        ======================================================== */
+    
+        function onSignedOut() {
+    
+            authenticated = false;
+    
+            stopGPS();
+    
+            if (globeScreen) {
+    
+                globeScreen.classList.remove(
+                    "pv-active"
+                );
+    
+            }
+    
+            const loginScreen =
+                document.getElementById("loginScreen");
+    
+            const introSection =
+                document.querySelector(".intro-section");
+    
+            const appHeader =
+                document.querySelector(".app-header");
+    
+            const appFooter =
+                document.querySelector(".app-footer");
+    
+            if (loginScreen) {
+                loginScreen.hidden = false;
+            }
+    
+            if (introSection) {
+                introSection.hidden = false;
+            }
+    
+            if (appHeader) {
+                appHeader.hidden = false;
+            }
+    
+            if (appFooter) {
+                appFooter.hidden = false;
+            }
+    
+        }
+    
+        window.addEventListener(
+            "potholevision:auth",
+            onAuthenticated
+        );
+    
+        window.addEventListener(
+            "potholevision:signout",
+            onSignedOut
+        );
+    
+        /* ========================================================
+           EXISTING SESSION CHECK
+        ======================================================== */
+    
+        function checkExistingSession() {
+    
+            const user =
+                window.PotholeVision?.currentUser;
+    
+            if (user) {
+    
+                onAuthenticated({
+    
+                    detail: {
+                        user: user
+                    }
+    
+                });
+    
+            }
+    
+        }
+    
+        if (document.readyState === "loading") {
+    
+            document.addEventListener(
+    
+                "DOMContentLoaded",
+    
+                checkExistingSession,
+    
+                { once: true }
+    
+            );
+    
+        } else {
+    
+            checkExistingSession();
+    
+        }
+    
+        /* ========================================================
+           PUBLIC MAP API
+        ======================================================== */
+    
+        window.PotholeVisionMap = {
+    
+            startLocationTracking: startGPS,
+    
+            stopLocationTracking: stopGPS,
+    
+            getCurrentPosition: () => currentPosition,
+    
+            getMap: () => map,
+    
+            returnToMap: returnToMap,
+    
+            focusUser: () => {
+    
+                if (currentPosition && map) {
+    
+                    map.flyTo({
+    
+                        center: [
+    
+                            currentPosition.longitude,
+    
+                            currentPosition.latitude
+    
+                        ],
+    
+                        zoom: CONFIG.destinationZoom,
+    
+                        pitch: CONFIG.destinationPitch,
+    
+                        bearing: headingAvailable
+                            ? currentHeading
+                            : map.getBearing(),
+    
+                        duration: 2000,
+    
+                        essential: true
+    
+                    });
+    
+                }
+    
+            }
+    
+        };
+    
+    })();
