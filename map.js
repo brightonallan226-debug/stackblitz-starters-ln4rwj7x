@@ -203,10 +203,10 @@ function installStyles() {
 
         .pv-inspection-marker {
             display: block;
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             padding: 0;
-            border-radius: 25%;
+            border-radius: 20%;
             background: #ef4444;
             border: 2px solid #ffffff;
             box-shadow:
