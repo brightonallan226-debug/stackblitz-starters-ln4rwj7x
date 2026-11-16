@@ -738,6 +738,16 @@ async function openRecordCamera() {
 }
 
 /* =========================================================
+   PUBLIC CAMERA FUNCTION FOR MAP.JS
+========================================================= */
+
+window.PotholeVision = window.PotholeVision || {};
+
+window.PotholeVision.startPotholeRecording = function () {
+  return openRecordCamera();
+};
+
+/* =========================================================
    STOP CAMERA
 ========================================================= */
 
@@ -2100,3 +2110,29 @@ console.log(
   }
 
 })();
+/* =========================================================
+   FINAL CAMERA REGISTRATION — MAP INTERFACE
+========================================================= */
+
+(function registerPotholeCamera() {
+  window.PotholeVision = window.PotholeVision || {};
+
+  window.PotholeVision.startPotholeRecording =
+    async function () {
+      console.log("[Pothole Vision] Camera function called.");
+
+      if (typeof openRecordCamera !== "function") {
+        throw new Error(
+          "openRecordCamera is not available."
+        );
+      }
+
+      return await openRecordCamera();
+    };
+
+  console.log(
+    "[Pothole Vision] Camera registration:",
+    typeof window.PotholeVision.startPotholeRecording
+  );
+})();
+
