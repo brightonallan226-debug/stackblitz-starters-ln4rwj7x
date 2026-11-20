@@ -202,7 +202,7 @@ function installStyles() {
         }
 
         .pv-inspection-marker {
-            display: block;
+            display: circle;
             width: 5px;
             height: 5px;
             padding: 0;
@@ -880,6 +880,7 @@ function initialiseProximityAudio() {
     }
 }
 
+
 function playProximityTone(level) {
     if (!proximityAudioContext) return;
 
@@ -897,19 +898,29 @@ function playProximityTone(level) {
 
     const context = proximityAudioContext;
 
+    // 200 metres: 2 beeps
+    // 100 metres: 4 beeps
+    // 50 metres: 6 beeps
+
     const pattern = level === "urgent"
         ? [
             { frequency: 880, offset: 0 },
-            { frequency: 660, offset: 0.22 },
-            { frequency: 880, offset: 0.44 }
+            { frequency: 660, offset: 0.30 },
+            { frequency: 880, offset: 0.60 },
+            { frequency: 660, offset: 0.90 },
+            { frequency: 880, offset: 1.20 },
+            { frequency: 660, offset: 1.50 }
         ]
         : level === "caution"
         ? [
             { frequency: 660, offset: 0 },
-            { frequency: 660, offset: 0.25 }
+            { frequency: 660, offset: 0.30 },
+            { frequency: 660, offset: 0.60 },
+            { frequency: 660, offset: 0.90 }
         ]
         : [
-            { frequency: 520, offset: 0 }
+            { frequency: 520, offset: 0 },
+            { frequency: 520, offset: 0.30 }
         ];
 
     pattern.forEach(tone => {
@@ -922,16 +933,26 @@ function playProximityTone(level) {
         oscillator.frequency.setValueAtTime(tone.frequency, start);
 
         gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.16, start + 0.025);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+
+        // Alert volume
+        gain.gain.exponentialRampToValueAtTime(
+            0.50,
+            start + 0.025
+        );
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            start + 0.22
+        );
 
         oscillator.connect(gain);
         gain.connect(context.destination);
 
         oscillator.start(start);
-        oscillator.stop(start + 0.19);
+        oscillator.stop(start + 0.23);
     });
 }
+
 
 function showProximityAlert(distance, level, inspection) {
     if (!proximityAlertElement) return;
