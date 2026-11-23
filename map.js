@@ -929,14 +929,14 @@ function playProximityTone(level) {
         const oscillator = context.createOscillator();
         const gain = context.createGain();
 
-        oscillator.type = "sine";
+        oscillator.type = "square";
         oscillator.frequency.setValueAtTime(tone.frequency, start);
 
         gain.gain.setValueAtTime(0.0001, start);
 
         // Alert volume
         gain.gain.exponentialRampToValueAtTime(
-            0.50,
+            0.90,
             start + 0.025
         );
 
